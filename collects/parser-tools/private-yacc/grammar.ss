@@ -17,7 +17,7 @@
   ;; Thus 0 <= dot-pos <= (vector-length rhs).
   (define-struct item (prod dot-pos) (make-inspector))
   
-  ;; gram-sym = (or/f term? non-term?)
+  ;; gram-sym = (union term? non-term?)
   ;; Each term has a unique index 0 <= index < number of terms
   ;; Each non-term has a unique index 0 <= index < number of non-terms  
   (define-struct term (sym index prec) (make-inspector))
@@ -27,12 +27,12 @@
   (define-struct prec (num assoc) (make-inspector))
   
   (provide/contract
-   (make-item (prod? (or/f false? natural-number?) . -> . item?))
-   (make-term (symbol? (or/f false? natural-number?) (or/f prec? false?) . -> . term?))
-   (make-non-term (symbol? (or/f false? natural-number?) . -> . non-term?))
+   (make-item (prod? (union false? natural-number?) . -> . item?))
+   (make-term (symbol? (union false? natural-number?) (union prec? false?) . -> . term?))
+   (make-non-term (symbol? (union false? natural-number?) . -> . non-term?))
    (make-prec (natural-number? (symbols 'left 'right 'nonassoc) . -> . prec?))
-   (make-prod (non-term? (vectorof (or/f non-term? term?))
-               (or/f false? natural-number?) (or/f false? prec?) syntax? . -> . prod?)))
+   (make-prod (non-term? (vectorof (union non-term? term?))
+               (union false? natural-number?) (union false? prec?) syntax? . -> . prod?)))
   
   (provide 
      

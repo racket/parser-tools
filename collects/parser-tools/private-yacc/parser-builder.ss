@@ -9,7 +9,7 @@
   
   (provide/contract
    (build-parser ((string? any? any? syntax? (listof syntax?) (listof syntax?)
-                   (or/f syntax? false?) syntax? syntax?) . ->* . (any? any? any? any?))))
+                   (union syntax? false?) syntax? syntax?) . ->* . (any? any? any? any?))))
   
   (define (strip so)
     (syntax-local-introduce
