@@ -73,7 +73,7 @@
                          #`(define (#,(make-ctor-name n) x)
                              (make-token '#,n x))))
                    (syntax->list (syntax (token ...))))
-               (define-syntax marked-token #f) ...))))
+               (define marked-token #f) ...))))
         ((_ ...)
          (raise-syntax-error 
           #f

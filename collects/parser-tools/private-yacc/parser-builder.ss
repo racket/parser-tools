@@ -12,14 +12,6 @@
                   (listof identifier?) (union syntax? false?) syntax?) . ->* .
                  (any? any? any? any?))))
   
-  (define (strip so)
-    (syntax-local-introduce
-     (datum->syntax-object
-      #f
-      (syntax-object->datum so)
-      so
-      so)))
-  
   ;; fix-check-syntax : (listof identifier?) (listof identifier?) (listof identifier?)
   ;;                    (union syntax? false?) syntax?) -> syntax?
   (define (fix-check-syntax input-terms start end assocs prods)
@@ -36,8 +28,7 @@
             (syntax-case prods ()
               (((_ rhs ...) ...)
                (syntax->list (syntax (rhs ... ...)))))))
-      (with-syntax (((tmp ...) term-binders)
-                    ((term-group ...)
+      (with-syntax (((term-group ...)
                      (map (lambda (tg)
                             (syntax-property
                              (datum->syntax-object tg #f)
@@ -46,9 +37,12 @@
                           input-terms))
                     ((end ...)
                      (map get-term-binder end))
+                    ((start ...)
+                     (map get-term-binder start))
                     ((bind ...)
                      (syntax-case prods ()
-                       (((bind _ ...) ...) (syntax->list (syntax (bind ...))))))
+                       (((bind _ ...) ...)
+                        (syntax->list (syntax (bind ...))))))
                     (((bound ...) ...)
                      (map
                       (lambda (rhs)
@@ -68,9 +62,9 @@
                                 ((_ (__ term ...) ...)
                                  (syntax->list (syntax (term ... ...))))))
                          null)))
-             #`(when #f
-                 (let ((bind void) ... (tmp void) ...)
-                   (void bound ... ... term-group ... end ... prec ...))))))
+        #`(when #f
+            (let ((bind void) ...)
+              (void bound ... ... term-group ... start ... end ... prec ...))))))
   
   (define (build-parser filename src-pos suppress input-terms start end assocs prods)
     (let* ((grammar (parse-input input-terms start end assocs prods src-pos))

@@ -164,7 +164,10 @@
       ((_ name-form body-form)
        (let-values (((name body)
                      (normalize-definition (syntax (define-syntax name-form body-form)) #'lambda)))
-         #`(define-syntax #,name (make-lex-trans #,body))))
+         #`(define-syntax #,name 
+             (let ((certifier (syntax-local-certifier)))
+               (make-lex-trans (lambda (stx)
+                                 (certifier (#,body stx) 'a)))))))
       (_
        (raise-syntax-error
         #f

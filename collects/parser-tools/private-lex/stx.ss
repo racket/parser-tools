@@ -34,8 +34,9 @@
   ;; Expands lex-abbrevs and applies lex-trans.
   (define (parse stx disappeared-uses)
     (let ((parse
-           (lambda (stx)
-             (parse stx disappeared-uses))))
+           (lambda (s)
+             (parse (syntax-recertify s stx (current-inspector) 'a) 
+                    disappeared-uses))))
     (syntax-case stx (repetition union intersection complement concatenation
                       char-range char-complement)
       (_
@@ -111,7 +112,9 @@
        ((op form ...)
         (identifier? (syntax op))
         (let* ((o (syntax op))
-               (expansion (syntax-local-value o (lambda () #f))))
+               (expansion (syntax-local-value 
+                           (syntax-recertify o stx (current-inspector) 'a) 
+                           (lambda () #f))))
           (set-box! disappeared-uses (cons o (unbox disappeared-uses)))
           (cond
             ((lex-trans? expansion)
