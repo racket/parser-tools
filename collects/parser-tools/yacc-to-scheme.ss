@@ -1,0 +1,118 @@
+(module yacc-to-scheme mzscheme
+  (require (lib "lex.ss" "parser-tools")
+           (lib "yacc.ss" "parser-tools")
+           (lib "list.ss"))
+  (provide trans)
+  
+  (define match-double-string
+    (lexer
+     ((^ #\" #\\) (cons (car (string->list lexeme))
+			(match-double-string input-port)))
+     ((@ #\\ (- #\000 #\377)) (cons (string-ref lexeme 1) (match-double-string input-port)))
+     (#\" null)))
+
+   (define match-single-string
+    (lexer
+     ((^ #\' #\\) (cons (car (string->list lexeme))
+			(match-single-string input-port)))
+     ((@ #\\ (- #\000 #\377)) (cons (string-ref lexeme 1) (match-single-string input-port)))
+     (#\' null)))
+  
+  (define-lex-abbrevs
+   (letter (: (- "a" "z") (- "A" "Z")))
+   (digit (- "0" "9"))
+   (initial (: (letter) ! $ % & * / < = > ? ^ _ ~ @))
+   (subsequent (: (initial) (digit) + - #\. @))
+   (comment (@ /* (* (@ (* (^ *)) (+ *) (^ / *))) */)))
+   
+  (define-empty-tokens x
+    (EOF PIPE |:| SEMI |%%| %prec))
+  (define-tokens y
+    (SYM STRING))
+  
+  (define get-token-grammar
+    (lexer
+     ("%%" '|%%|)
+     ((: ":") (string->symbol lexeme))
+     (%prec (string->symbol lexeme))
+     (#\| 'PIPE)
+     ((: #\newline #\tab " " (comment) (@ "{" (* (^ "}")) "}")) (get-token-grammar input-port))
+     (#\; 'SEMI)
+     (#\' (token-STRING (string->symbol (list->string (match-single-string input-port)))))
+     (#\" (token-STRING (string->symbol (list->string (match-double-string input-port)))))
+     ((@ (initial) (* (subsequent))) (token-SYM (string->symbol lexeme)))))
+
+  (define (parse-grammar enter-term enter-empty-term enter-non-term)
+    (parser
+     (tokens x y)
+     (error error)
+     (end |%%|)
+     (start gram)
+     (grammar
+      (gram 
+       ((production) (list $1))
+       ((production gram) (cons $1 $2)))
+      (production
+       ((SYM |:| prods SEMI) 
+        (begin
+          (enter-non-term $1)
+          (cons $1 $3))))
+      (prods
+       ((rhs) (list `(,$1 #f)))
+       ((rhs prec) (list `(,$1 ,$2 #f)))
+       ((rhs PIPE prods) (cons `(,$1 #f) $3))
+       ((rhs prec PIPE prods) (cons `(,$1 ,$2 #f) $3)))
+      (prec
+       ((%prec SYM)
+        (begin
+          (enter-term $2)
+          (list 'prec $2)))
+       ((%prec STRING)
+        (begin
+          (enter-empty-term $2)
+          (list 'prec $2))))
+      (rhs
+       (() null)
+       ((SYM rhs) 
+	(begin
+	  (enter-term $1)
+	  (cons $1 $2)))
+       ((STRING rhs) 
+	(begin
+	  (enter-empty-term $1)
+	  (cons $1 $2)))))))
+  
+  (define (trans filename)
+    (let* ((i (open-input-file filename))
+           (terms (make-hash-table))
+           (eterms (make-hash-table))
+           (nterms (make-hash-table))
+           (enter-term
+            (lambda (s)
+              (if (not (hash-table-get nterms s (lambda () #f)))
+                  (hash-table-put! terms s #t))))
+           (enter-empty-term
+            (lambda (s)
+              (if (not (hash-table-get nterms s (lambda () #f)))
+                  (hash-table-put! eterms s #t))))
+           (enter-non-term
+            (lambda (s)
+	     (hash-table-remove! terms s)
+              (hash-table-remove! eterms s)
+              (hash-table-put! nterms s #t))))
+      (regexp-match "%%" i)
+      (begin0
+       (let ((gram ((parse-grammar enter-term enter-empty-term enter-non-term)
+		    (lambda () 
+		      (let ((t (get-token-grammar i)))
+			t)))))
+          `(begin
+             (define-tokens t ,(quicksort (hash-table-map terms (lambda (k v) k)) string<?))
+             (define-empty-tokens et ,(quicksort (hash-table-map eterms (lambda (k v) k)) string<?))
+             (parser
+              (start ___)
+              (end ___)
+              (error ___)
+              (tokens t et)
+              (grammar ,@gram))))
+            (close-input-port i)))))
