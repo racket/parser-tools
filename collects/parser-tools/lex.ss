@@ -63,8 +63,8 @@
 
   ;; c = char | eof
   ;; lex-buf = 
-  ;;   (make-lex-buffer input-port (c list) (c list) int int int (int list) boolean)
-  (define-struct lex-buffer (ip from to offset line col line-lengths tab-skips has-seen-eof?))
+  ;;   (make-lex-buffer input-port (c list) (c list) int int int (int list))
+  (define-struct lex-buffer (ip from to offset line col line-lengths tab-skips))
 
   ;; make-lex-buf: input-port -> lex-buf
   (define make-lex-buf
@@ -74,7 +74,7 @@
        ((not (input-port? ip))
 	(raise-type-error 'make-lex-buf "input-port" 0 ip))
        (else
-	(make-lex-buffer ip null null 1 1 1 null null #f))))
+	(make-lex-buffer ip null null 1 1 1 null null))))
      ((ip offsets)
       (cond
        ((not (input-port? ip))
@@ -85,19 +85,12 @@
 	    (not (andmap (lambda (x) (>= x 0)) offsets)))
 	(raise-type-error 'make-lex-buf "list of 3 non-negative exact integers" 1 ip offsets))
        (else
-	(make-lex-buffer ip null null (caddr offsets) (car offsets) (cadr offsets) null null #f))))))
+	(make-lex-buffer ip null null (caddr offsets) (car offsets) (cadr offsets) null null))))))
 
   (define (get-next lb)
     (cond
      ((null? (lex-buffer-from lb)) 
-      (let ((res (read-char (lex-buffer-ip lb))))
-        (if (eof-object? res)
-            (if (lex-buffer-has-seen-eof? lb)
-                (raise-read-error
-                 (format "lex-buf: No characters left in input stream")
-                 #f #f #f #f #f)
-                (set-lex-buffer-has-seen-eof?! lb #t)))
-        res))
+      (read-char (lex-buffer-ip lb)))
      (else 
       (begin0
        (car (lex-buffer-from lb))
