@@ -13,7 +13,7 @@
            &
            ~
            (rename sre-- -)
-           (rename sre-/ /))
+           (rename sre-/ /)/-only-chars)
            
   (define-lex-trans sre-*
     (syntax-rules ()

@@ -173,7 +173,9 @@
                 (let ((first-pos (get-position ip))
                       (first-char (peek-char-or-special ip 0)))
                   (cond
-                    ((eq? 'special first-char)
+                    ((eof-object? first-char)
+                     (do-match ip first-pos eof-action (read-char-or-special ip) wrap?))
+                    ((not (char? first-char))
                      (let* ((comment? #f)
                             (error? #f)
                             (spec (with-handlers ((special-comment?
@@ -190,8 +192,6 @@
                                                    (error? special-error-action)
                                                    (else special-action))
                                     spec wrap?)))))
-                    ((eof-object? first-char)
-                     (do-match ip first-pos eof-action (read-char-or-special ip) wrap?))
                     (else
                      (let lexer-loop (
                                       ;; current-state
@@ -210,7 +210,7 @@
                        (let ((next-state 
                               (cond
                                 ((eof-object? char) #f)
-                                ((eq? char 'special) #f)
+                                ((not (char? char)) #f)
                                 (else (get-next-state (char->integer char)
                                                       (vector-ref trans-table state))))))
                          (cond
