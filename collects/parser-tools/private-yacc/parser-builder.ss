@@ -122,14 +122,14 @@
                    (let ((action (find-action stack ip)))
                      (cond
                        ((shift? action)
-                        (printf "shift:~a~n" (shift-state action))
+                        ;; (printf "shift:~a~n" (shift-state action))
                         (let ((val (if (token? ip)
                                        (token-value ip)
                                        #f)))
                           (loop (cons (shift-state action) (cons val stack))
                                 (get-token))))
                        ((reduce? action)
-                        (printf "reduce:~a~n" (reduce-prod-num action))
+                        ;; (printf "reduce:~a~n" (reduce-prod-num action))
                         (let-values (((new-stack args)
                                       (reduce-stack stack 
                                                     (reduce-rhs-length action)
@@ -144,7 +144,7 @@
                                               new-stack))
                                   ip))))
                        ((accept? action)
-                        (printf "accept~n")
+                        ;; (printf "accept~n")
                         (cadr stack))
                        (else 
                         (err)
