@@ -4,9 +4,12 @@
   (require "input-file-parser.ss"
            "grammar.ss"
            "table.ss"
-           (lib "class.ss"))
+           (lib "class.ss")
+           (lib "contracts.ss"))
   
-  (provide build-parser)
+  (provide/contract
+   (build-parser ((string? any? any? syntax? (listof syntax?) (listof syntax?)
+                   (or/f syntax? false?) syntax? syntax?) . ->* . (any? any? any? any?))))
   
   (define (strip so)
     (syntax-local-introduce
@@ -20,14 +23,14 @@
     (syntax-case prods ()
       ((_ (bind ((bound ...) x ...) ...) ...)
        (let ((binds (syntax->list (syntax (bind ...))))
-             (bounds (cons start 
-                           (apply 
-                            append 
-                            (map syntax->list 
-                                 (apply 
-                                  append 
-                                  (map syntax->list 
-                                       (syntax->list (syntax (((bound ...) ...) ...)))))))))
+             (bounds (append start 
+                             (apply 
+                              append 
+                              (map syntax->list 
+                                   (apply 
+                                    append 
+                                    (map syntax->list 
+                                         (syntax->list (syntax (((bound ...) ...) ...)))))))))
              (terms (get-term-list terms))
              (precs (if precs
                         (syntax-case precs ()

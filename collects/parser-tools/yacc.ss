@@ -53,42 +53,43 @@
                (if tokens
                    (raise-syntax-error  #f "Multiple tokens declarations" stx)
                    (set! tokens arg)))
-              ((start symbol)
-               (cond
-                 ((not (identifier? (syntax symbol)))
-                  (raise-syntax-error
-                   'parser-start
-                   "Start non-terminal must be a symbol"
-                   (syntax symbol)))
-                 (start
-                  (raise-syntax-error #f "Multiple start declarations" stx))
-                 (else
-                  (set! start (syntax symbol)))))
-              ((end symbols ...)
-               (begin
+              ((start symbol ...)
+               (let ((symbols (syntax->list (syntax (symbol ...)))))
                  (for-each
                   (lambda (sym)
-                    (if (not (identifier? sym))
-                        (raise-syntax-error
-                         'parser-end
-                         "End token must be a symbol"
-                         sym)))
-                  (syntax->list (syntax (symbols ...))))
-                 (let ((d (duplicate-list? (syntax-object->datum 
-                                            (syntax (symbols ...))))))
-                   (if d
-                       (raise-syntax-error
-                        'parser-end
-                        (format "Duplicate end token definition for ~a" d)
-                        arg)))
-                 (if (= 0 (length (syntax->list (syntax (symbols ...)))))
-                     (raise-syntax-error
-                      'parser-end
-                      "end declaration must contain at least 1 token"
-                      arg))
-                 (if end
+                    (unless (identifier? sym)
+                      (raise-syntax-error 'parser-start
+                                          "Start symbol must be a symbol"
+                                          sym)))
+                  symbols)
+                 (when start
+                   (raise-syntax-error #f "Multiple start declarations" stx))
+                 (when (null? symbols)
+                   (raise-syntax-error 'parser-start
+                                       "Missing start symbol"
+                                       stx))
+                 (set! start symbols)))
+              ((end symbols ...)
+               (let ((symbols (syntax->list (syntax (symbols ...)))))
+                 (for-each
+                  (lambda (sym)
+                    (unless (identifier? sym)
+                      (raise-syntax-error 'parser-end
+                                          "End token must be a symbol"
+                                          sym)))
+                  symbols)
+                 (let ((d (duplicate-list? (map syntax-object->datum symbols))))
+                   (when d
+                     (raise-syntax-error 'parser-end
+                                         (format "Duplicate end token definition for ~a" d)
+                                         arg))
+                   (when (null? symbols)
+                     (raise-syntax-error 'parser-end
+                                         "end declaration must contain at least 1 token"
+                                         arg))
+                   (when end
                      (raise-syntax-error #f "Multiple end declarations" stx))
-                 (set! end (syntax->list (syntax (symbols ...))))))
+                   (set! end symbols))))
               ((precs decls ...)
                (if precs
                    (raise-syntax-error #f "Multiple precs declarations" stx)
@@ -100,26 +101,25 @@
               ((yacc-output filename)
                (cond
                  ((not (string? (syntax-object->datum (syntax filename))))
-                  (raise-syntax-error 
-                   'parser-yacc-output
-                   "Yacc-output filename must be a string"
-                   (syntax filename)))
+                  (raise-syntax-error 'parser-yacc-output
+                                      "Yacc-output filename must be a string"
+                                      (syntax filename)))
                  (yacc-output
                   (raise-syntax-error #f "Multiple yacc-output declarations" stx))
                  (else
                   (set! yacc-output (syntax-object->datum (syntax filename))))))
               (_ (raise-syntax-error 'parser-args "argument must match (debug filename), (error expression), (tokens def ...), (start non-term), (end tokens ...), (precs decls ...), or  (grammar prods ...)" arg))))
           (syntax->list (syntax (args ...))))
-         (if (not tokens)
-             (raise-syntax-error #f "missing tokens declaration" stx))
-         (if (not error)
-             (raise-syntax-error #f "missing error declaration" stx))
-         (if (not grammar)
-             (raise-syntax-error #f "missing grammar declaration" stx))
-         (if (not end)
-             (raise-syntax-error #f "missing end declaration" stx))
-         (if (not start)
-             (raise-syntax-error #f "missing start declaration" stx))
+         (unless tokens
+           (raise-syntax-error #f "missing tokens declaration" stx))
+         (unless error
+           (raise-syntax-error #f "missing error declaration" stx))
+         (unless grammar
+           (raise-syntax-error #f "missing grammar declaration" stx))
+         (unless end
+           (raise-syntax-error #f "missing end declaration" stx))
+         (unless start
+           (raise-syntax-error #f "missing start declaration" stx))
          (let-values (((table term-sym->index actions check-syntax-fix)
                        (build-parser (if debug debug "")
                                      src-pos
@@ -130,23 +130,23 @@
                                      precs
                                      grammar
                                      stx)))
-           (if (and yacc-output (not (string=? yacc-output "")))
-               (with-handlers [(exn:i/o:filesystem?
-                                (lambda (e)
-                                  (fprintf 
-                                   (current-error-port)
-                                   "Cannot write yacc-output to file \"~a\".  ~a~n"
-                                   (exn:i/o:filesystem-pathname e)
-                                   (exn:i/o:filesystem-detail e))))]
-                 (call-with-output-file yacc-output
-                   (lambda (port)
-                     (display-yacc (syntax-object->datum grammar) 
-                                   tokens 
-                                   (syntax-object->datum start)
-                                   (if precs
-                                       (syntax-object->datum precs)
-                                       #f)
-                                   port)))))
+           (when (and yacc-output (not (string=? yacc-output "")))
+             (with-handlers [(exn:i/o:filesystem?
+                              (lambda (e)
+                                (fprintf 
+                                 (current-error-port)
+                                 "Cannot write yacc-output to file \"~a\".  ~a~n"
+                                 (exn:i/o:filesystem-pathname e)
+                                 (exn:i/o:filesystem-detail e))))]
+               (call-with-output-file yacc-output
+                 (lambda (port)
+                   (display-yacc (syntax-object->datum grammar) 
+                                 tokens 
+                                 (syntax-object->datum start)
+                                 (if precs
+                                     (syntax-object->datum precs)
+                                     #f)
+                                 port)))))
            (with-syntax ((check-syntax-fix check-syntax-fix)
                          (err error)
                          (ends end)
@@ -160,10 +160,9 @@
                 check-syntax-fix
                 (parser-body debug err (quote ends) table term-sym->index actions src-pos)))))))
       (_
-       (raise-syntax-error
-        #f
-        "parser must have the form (parser args ...)"
-        stx))))
+       (raise-syntax-error #f
+                           "parser must have the form (parser args ...)"
+                           stx))))
 
   (define (reduce-stack stack num ret-vals src-pos)
     (cond
@@ -181,7 +180,7 @@
 
   (define-struct stack-frame (state value start-pos end-pos) (make-inspector))
  
-  (define empty-stack (list (make-stack-frame 0 #f #f #f)))
+  (define (make-empty-stack i) (list (make-stack-frame i #f #f #f)))
 
   (define (false-thunk) #f) 
 
@@ -285,59 +284,62 @@
                             (err #f (token-name tok) (token-value tok) (cadr ip) (caddr ip))
                             (err #f (token-name tok) (token-value tok)))
                         (raise-read-error (format "parser: got token of unknown type ~a" (token-name tok))
-                                          #f #f #f #f #f)))))))
-      (lambda (get-token)
-        (let parsing-loop ((stack empty-stack)
-                           (ip (get-token)))
-          (let* ((tok (input->token ip))
-                 (action (find-action stack tok ip)))
-            (cond
-              ((shift? action)
-               ;; (printf "shift:~a~n" (shift-state action))
-               (let ((val (token-value tok)))
-                 (parsing-loop (cons (if src-pos
-                                         (make-stack-frame (shift-state action)
-                                                           val
-                                                           (cadr ip)
-                                                           (caddr ip))
-                                         (make-stack-frame (shift-state action)
-                                                           val
-                                                           #f
-                                                           #f))
-                                     stack)
-                               (get-token))))
-              ((reduce? action)
-               ;; (printf "reduce:~a~n" (reduce-prod-num action))
-               (let-values (((new-stack args)
-                             (reduce-stack stack 
-                                           (reduce-rhs-length action)
-                                           null
-                                           src-pos)))
-                 (let* ((A (reduce-lhs-num action))
-                        (goto (array2d-ref table (stack-frame-state (car new-stack)) A)))
-                   (parsing-loop (cons
-                                  (if src-pos
-                                      (make-stack-frame goto 
-                                                        (apply (vector-ref actions (reduce-prod-num action)) args)
-                                                        (if (null? args) (cadr ip) (cadr args))
-                                                        (if (null? args) 
-                                                            (caddr ip)
-                                                            (list-ref args (- (* (reduce-rhs-length action) 3) 1))))
-                                      (make-stack-frame goto 
-                                                        (apply (vector-ref actions (reduce-prod-num action)) args)
-                                                        #f
-                                                        #f))
-                                  new-stack)
-                                 ip))))
-              ((accept? action)
-               ;; (printf "accept~n")
-               (stack-frame-value (car stack)))
-              (else 
-               (if src-pos
-                   (err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
-                   (err #t (token-name tok) (token-value tok)))
-               (parsing-loop (fix-error stack tok ip get-token) (get-token)))))))))
-                 
-  
-
+                                          #f #f #f #f #f))))))
+             (make-parser
+              (lambda (start-number)
+                (lambda (get-token)
+                  (let parsing-loop ((stack (make-empty-stack start-number))
+                                     (ip (get-token)))
+                    (let* ((tok (input->token ip))
+                           (action (find-action stack tok ip)))
+                      (cond
+                        ((shift? action)
+                         ;; (printf "shift:~a~n" (shift-state action))
+                         (let ((val (token-value tok)))
+                           (parsing-loop (cons (if src-pos
+                                                   (make-stack-frame (shift-state action)
+                                                                     val
+                                                                     (cadr ip)
+                                                                     (caddr ip))
+                                                   (make-stack-frame (shift-state action)
+                                                                     val
+                                                                     #f
+                                                                     #f))
+                                               stack)
+                                         (get-token))))
+                        ((reduce? action)
+                         ;; (printf "reduce:~a~n" (reduce-prod-num action))
+                         (let-values (((new-stack args)
+                                       (reduce-stack stack 
+                                                     (reduce-rhs-length action)
+                                                     null
+                                                     src-pos)))
+                           (let* ((A (reduce-lhs-num action))
+                                  (goto (array2d-ref table (stack-frame-state (car new-stack)) A)))
+                             (parsing-loop 
+                              (cons
+                               (if src-pos
+                                   (make-stack-frame
+                                    goto 
+                                    (apply (vector-ref actions (reduce-prod-num action)) args)
+                                    (if (null? args) (cadr ip) (cadr args))
+                                    (if (null? args) 
+                                        (caddr ip)
+                                        (list-ref args (- (* (reduce-rhs-length action) 3) 1))))
+                                   (make-stack-frame
+                                    goto 
+                                    (apply (vector-ref actions (reduce-prod-num action)) args)
+                                    #f
+                                    #f))
+                               new-stack)
+                              ip))))
+                        ((accept? action)
+                         ;; (printf "accept~n")
+                         (stack-frame-value (car stack)))
+                        (else 
+                         (if src-pos
+                             (err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
+                             (err #t (token-name tok) (token-value tok)))
+                         (parsing-loop (fix-error stack tok ip get-token) (get-token))))))))))
+      (make-parser 0)))
   )

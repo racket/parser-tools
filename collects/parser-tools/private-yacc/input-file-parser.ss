@@ -7,10 +7,13 @@
   (require "yacc-helper.ss"
            "../private-lex/token-syntax.ss"
            "grammar.ss"
-           (lib "list.ss")
-           (lib "class.ss"))
+           (lib "class.ss")
+           (lib "contracts.ss"))
+  
 
-  (provide parse-input get-term-list)
+  (provide/contract 
+   (parse-input ((listof syntax?) (listof syntax?) syntax? (or/f false? syntax?) syntax? syntax? any? . -> . (is-a?/c grammar%)))
+   (get-term-list (syntax? . -> . (listof syntax?))))
 
   (define stx-for-original-property (read-syntax #f (open-input-string "original")))
 
@@ -44,54 +47,6 @@
                 `(,(datum->syntax-object act name b stx-for-original-property)
                   ,@(get-args (add1 i) (cdr rhs)))))))))))
     
-  ;; nullable: production list * int -> non-term set
-  ;; determines which non-terminals can derive epsilon
-  (define (nullable prods num-nts)
-    (letrec ((nullable (make-vector num-nts #f))
-	     (added #f)
-	     
-	     ;; possible-nullable: producion list -> production list
-	     ;; Removes all productions that have a terminal
-	     (possible-nullable
-	      (lambda (prods)
-		(filter (lambda (prod)
-			  (vector-andmap non-term? (prod-rhs prod)))
-			prods)))
-	     
-	     ;; set-nullables: production list -> production list
-	     ;; makes one pass through the productions, adding the ones
-	     ;; known to be nullable now to nullable and returning a list
-	     ;; of productions that we don't know about yet. 
-	     (set-nullables
-	      (lambda (prods)
-		(cond
-		 ((null? prods) null)
-		 ((vector-ref  nullable 
-			       (gram-sym-index (prod-lhs (car prods))))
-		  (set-nullables (cdr prods)))
-		 ((vector-andmap (lambda (nt) 
-				   (vector-ref nullable (gram-sym-index nt)))
-				 (prod-rhs (car prods)))
-		  (vector-set! nullable 
-			       (gram-sym-index (prod-lhs (car prods)))
-			       #t)
-		  (set! added #t)
-		  (set-nullables (cdr prods)))
-		 (else
-		  (cons (car prods) 
-			(set-nullables (cdr prods))))))))
-      
-      (let loop ((P (possible-nullable prods)))
-	(cond
-	 ((null? P) nullable)
-	 (else
-	  (set! added #f)
-	  (let ((new-P (set-nullables P)))
-	    (if added
-		(loop new-P)
-		nullable)))))))
-
-  
   ;; Given the list of terminal symbols and the precedence/associativity definitions,
   ;; builds terminal structures (See grammar.ss)
   ;; build-terms: symbol list * symbol list list -> term list
@@ -115,16 +70,12 @@
 	  (set! counter (add1 counter))))
        precs)
       
-      (set! counter 0)
-
       ;; Build the terminal structures
       (map 
        (lambda (term-sym)
-	 (begin0
-	  (make-term term-sym 
-		     counter 
-		     (hash-table-get prec-table term-sym (lambda () #f)))
-	  (set! counter (add1 counter))))
+         (make-term term-sym 
+                    #f
+                    (hash-table-get prec-table term-sym (lambda () #f))))
        term-list)))
   
   ;; Retrieves the terminal symbols from a terminals-def (See terminal-syntax.ss)
@@ -158,12 +109,9 @@
         "Token declaration must be (tokens symbol ...)"
         so))))
   
-  ;; parse-input: syntax-object * syntax-object list * syntax-object^4 * boolean-> grammar
   (define (parse-input start ends term-defs prec-decls prods runtime src-pos)
-    (let* ((counter 0)
+    (let* ((start-syms (map syntax-object->datum start))
            
-           (start-sym (syntax-object->datum start))
-
            (list-of-terms (map syntax-object->datum (get-term-list term-defs)))
 
            (end-terms
@@ -177,7 +125,7 @@
                     end)
                    (syntax-object->datum end)))
              ends))
-           
+                     
            ;; Get the list of terminals out of input-terms
            
            (list-of-non-terms
@@ -263,13 +211,8 @@
            
            (terms (build-terms list-of-terms precs))
            
-           (non-terms (begin
-                        (set! counter 2)
-                        (map (lambda (non-term)
-                               (begin0
-                                 (make-non-term non-term counter)
-                                 (set! counter (add1 counter))))
-                             list-of-non-terms)))
+           (non-terms (map (lambda (non-term) (make-non-term non-term #f))
+                           list-of-non-terms))
            (term-table (make-hash-table))
            (non-term-table (make-hash-table)))
       
@@ -337,11 +280,10 @@
                     (eq? (syntax-object->datum a) (syntax-object->datum b)))
                   ((prod-rhs action)
                    (let ((p (parse-prod (syntax prod-rhs))))
-                     (set! counter (add1 counter))
                      (make-prod 
                       nt
                       p
-                      counter 
+                      #f
                       (let loop ((i (sub1 (vector-length p))))
                         (if (>= i 0)
                             (let ((gs (vector-ref p i)))
@@ -353,11 +295,10 @@
                   ((prod-rhs (prec term) action)
                    (identifier? (syntax term))
                    (let ((p (parse-prod (syntax prod-rhs))))
-                     (set! counter (add1 counter))
                      (make-prod 
                       nt 
                       p
-                      counter
+                      #f
                       (term-prec
                        (hash-table-get 
                         term-table 
@@ -382,9 +323,8 @@
                 (syntax-case prods-so ()
                   ((nt productions ...)
                    (> (length (syntax->list (syntax (productions ...)))) 0)
-                   (let ((nt (hash-table-get 
-			      non-term-table 
-			      (syntax-object->datum (syntax nt)))))
+                   (let ((nt (hash-table-get non-term-table 
+                                             (syntax-object->datum (syntax nt)))))
                      (map (lambda (p) (parse-prod+action nt p)) 
                           (syntax->list (syntax (productions ...))))))
 		  (_
@@ -393,55 +333,43 @@
                     "A production for a non-terminal must be (non-term right-hand-side ...) with at least 1 right hand side"
                     prods-so))))))
 		 
-        (if (not (memq start-sym list-of-non-terms))
-            (raise-syntax-error
-             'parser-start
-             (format "Start symbol ~a not defined as a non-terminal"
-                     start-sym)
-             start))
+        (for-each
+         (lambda (sstx ssym)
+           (unless (memq ssym list-of-non-terms)
+             (raise-syntax-error
+              'parser-start
+              (format "Start symbol ~a not defined as a non-terminal" ssym)
+              sstx)))
+         start start-syms)
                  
-        (set! counter (length end-terms))
-        (let* ((start (make-non-term (gensym) 0))
-               (end-non-term (make-non-term (gensym) 1))
+        (let* ((starts (map (lambda (x) (make-non-term (gensym) #f)) start-syms))
+               (end-non-terms (map (lambda (x) (make-non-term (gensym) #f)) start-syms))
                (parsed-prods (map parse-prods-for-nt (cdr (syntax->list prods))))
-               (counter2 0)
                (prods 
-                `((,(make-prod start (vector end-non-term) 0 #f #f))
-                  ,(map
-                    (lambda (end)
-                      (set! counter2 (add1 counter2))
-                      (make-prod end-non-term
-                                 (vector
-                                  (hash-table-get non-term-table start-sym)
-                                  (hash-table-get term-table end))
-                                 counter2
-                                 #f
-                                 (datum->syntax-object
-                                  runtime
-                                  `(lambda (x) x))))
-                    end-terms)
-                  ,@parsed-prods))
-               (nulls (nullable (apply append prods) 
-                                (+ 2 (length non-terms)))))
-          
+                `(,@(map (lambda (start end-non-term)
+                           (list (make-prod start (vector end-non-term) #f #f #f)))
+                         starts end-non-terms)
+                  ,@(map
+                     (lambda (end-nt start-sym)
+                       (map
+                        (lambda (end)
+                          (make-prod end-nt
+                                     (vector
+                                      (hash-table-get non-term-table start-sym)
+                                      (hash-table-get term-table end))
+                                     #f
+                                     #f
+                                     (datum->syntax-object
+                                      runtime
+                                      `(lambda (x) x))))
+                        end-terms))
+                     end-non-terms start-syms)
+                  ,@parsed-prods)))
 
-;;           (printf "nullable: {~a}~n~n"
-;;                   (apply string-append
-;;                          (let loop ((i 0))
-;;                            (cond
-;;                              ((>= i (vector-length nulls)) null)
-;;                              ((vector-ref nulls i)
-;;                               (cons
-;;                                (format "~a " 
-;;                                        (gram-sym-symbol
-;;                                         (list-ref (cons start (cons end-non-term non-terms)) i)))
-;;                                (loop (add1 i))))
-;;                              (else (loop (add1 i)))))))
           (make-object grammar%
             prods
             terms
-            (cons start (cons end-non-term non-terms))
-            nulls
+            (append starts (append end-non-terms non-terms))
             (map (lambda (term-name)
                    (hash-table-get term-table term-name))
                  end-terms)))))))

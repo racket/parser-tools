@@ -1,7 +1,9 @@
 #cs
 (module grammar mzscheme
   
-  (require (lib "class.ss"))
+  (require (lib "class.ss")
+           (lib "list.ss")
+           "yacc-helper.ss")
   
   ;; Constructs to create and access grammars, the internal
   ;; representation of the input to the parser generator.
@@ -148,16 +150,46 @@
       ;; where the nth element in the outermost list is the list of productions with the nth non-term as lhs
       (init prods)
       ;; nullable-non-terms is indexed by the non-term-index and is true iff non-term is nullable
-      (init-field terms non-terms nullable-non-terms end-terms)
+      (init-field terms non-terms end-terms)
   
-      ;; indexed by the index of the non-term - contains the list of productions for that non-term
-      (define nt->prods (list->vector prods))
       ;; list of all productions
       (define all-prods (apply append prods))
       (define num-prods (length all-prods))
       (define num-terms (length terms))
       (define num-non-terms (length non-terms))
       
+      (let ((count 0))
+        (for-each
+         (lambda (nt)
+           (set-non-term-index! nt count)
+           (set! count (add1 count)))
+         non-terms))
+      
+      (let ((count 0))
+        (for-each
+         (lambda (t)
+           (set-term-index! t count)
+           (set! count (add1 count)))
+         terms))
+
+      (let ((count 0))
+        (for-each
+         (lambda (prod)
+           (set-prod-index! prod count)
+           (set! count (add1 count)))
+         all-prods))
+      
+      ;; indexed by the index of the non-term - contains the list of productions for that non-term
+      (define nt->prods
+        (let ((v (make-vector (length prods) #f)))
+          (for-each (lambda (prods)
+                      (vector-set! v (non-term-index (prod-lhs (car prods))) prods))
+                    prods)
+          v))
+      
+      (define nullable-non-terms
+        (nullable all-prods num-non-terms))
+            
       (define/public (get-num-terms) num-terms)
       (define/public (get-num-non-terms) num-non-terms)
       
@@ -193,8 +225,56 @@
       (define/public (nullable-after-dot?-thunk)
         (lambda (item)
           (nullable-after-dot? item)))))
-	
+  
+  
+  ;; nullable: production list * int -> non-term set
+  ;; determines which non-terminals can derive epsilon
+  (define (nullable prods num-nts)
+    (letrec ((nullable (make-vector num-nts #f))
+	     (added #f)
+	     
+	     ;; possible-nullable: producion list -> production list
+	     ;; Removes all productions that have a terminal
+	     (possible-nullable
+	      (lambda (prods)
+		(filter (lambda (prod)
+			  (vector-andmap non-term? (prod-rhs prod)))
+			prods)))
+	     
+	     ;; set-nullables: production list -> production list
+	     ;; makes one pass through the productions, adding the ones
+	     ;; known to be nullable now to nullable and returning a list
+	     ;; of productions that we don't know about yet. 
+	     (set-nullables
+	      (lambda (prods)
+		(cond
+                  ((null? prods) null)
+                  ((vector-ref  nullable 
+                                (gram-sym-index (prod-lhs (car prods))))
+                   (set-nullables (cdr prods)))
+                  ((vector-andmap (lambda (nt) 
+                                    (vector-ref nullable (gram-sym-index nt)))
+                                  (prod-rhs (car prods)))
+                   (vector-set! nullable 
+                                (gram-sym-index (prod-lhs (car prods)))
+                                #t)
+                   (set! added #t)
+                   (set-nullables (cdr prods)))
+                  (else
+                   (cons (car prods) 
+                         (set-nullables (cdr prods))))))))
+      
+      (let loop ((P (possible-nullable prods)))
+	(cond
+          ((null? P) nullable)
+          (else
+           (set! added #f)
+           (let ((new-P (set-nullables P)))
+             (if added
+                 (loop new-P)
+                 nullable)))))))
 
+  
   ;; ------------------------ Productions ---------------------------
   
   ;; production = (make-prod non-term (gram-sym vector) int prec syntax-object)
