@@ -227,7 +227,7 @@
            (term-vector (list->vector (send g get-terms)))
            (end-terms (send g get-end-terms))
            (table (make-parse-table (send a get-num-states)))
-           (get-lookahead (time (compute-LA a g))))
+           (get-lookahead (compute-LA a g)))
 
       (for-each
        (lambda (trans-key/state)
