@@ -49,7 +49,7 @@
 
 (define calcp
   (parser
-   
+
    (start start)
    (end newline EOF)
    (tokens value-tokens op-tokens)
@@ -66,7 +66,7 @@
     (start [() #f]
            ;; If there is an error, ignore everything before the error
            ;; and try to start over right after the error
-           [(error exp) $2]
+           [(error start) $2]
            [(exp) $1])
     
     (exp [(NUM) $1]

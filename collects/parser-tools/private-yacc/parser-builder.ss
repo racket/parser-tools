@@ -86,7 +86,7 @@
            
            (parser-code
             `(letrec ((err ,error-expr)
-                      (err-state 0)
+                      (ends ',end)
                       (table ,table-code)
                       (term-sym->index ,token-code)
                       (actions ,actions-code)
@@ -123,24 +123,26 @@
                        (lambda (stack tok ip get-token)
                          (letrec ((remove-input
 				   (lambda ()
-				     (let ((a (find-action stack tok ip)))
-				       (cond
-					((shift? a)
-					 ;; (printf "shift:~a~n" (shift-state a))
-                                         ,(if src-pos
-                                              ``(,(shift-state a)
-                                                 ,(if (token? ip) (token-value ip) #f)
-                                                 ,(cadr ip)
-                                                 ,(caddr ip)
-                                                 ,@stack)
-                                              ``(,(shift-state a)
-                                                 ,(if (token? ip) (token-value ip) #f)
-                                                 ,@stack)))
-					(else
-					 ;; (printf "discard input:~a~n" tok)
-					 (set! ip (get-token))
-                                         (set! tok (input->token ip))
-					 (remove-input))))))
+                                     (if (memq (token-name tok) ends)
+                                         #f
+                                         (let ((a (find-action stack tok ip)))
+                                           (cond
+                                             ((shift? a)
+                                              ;; (printf "shift:~a~n" (shift-state a))
+                                              ,(if src-pos
+                                                   ``(,(shift-state a)
+                                                      ,(if (token? ip) (token-value ip) #f)
+                                                      ,(cadr ip)
+                                                      ,(caddr ip)
+                                                      ,@stack)
+                                                   ``(,(shift-state a)
+                                                      ,(if (token? ip) (token-value ip) #f)
+                                                      ,@stack)))
+                                             (else
+                                              ;; (printf "discard input:~a~n" tok)
+                                              (set! ip (get-token))
+                                              (set! tok (input->token ip))
+                                              (remove-input)))))))
 				  (remove-states
 				   (lambda ()
 				     (let ((a (find-action stack (make-token 'error #f) #f)))
