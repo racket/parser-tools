@@ -58,14 +58,14 @@
               ((get-char-groups (->re `(& (* ,r1) (@ (* ,r2) "3") "4") c) #f)
                (list r1 r2 (->re "3" c) (->re "4" c)))
               )
-                                 
+  (define loc:member? is:member?)
   
   ;; deriveR : re char cache -> re
   (define (deriveR r c cache)
     (cond
       ((or (eq? r e) (eq? r z)) z)
       ((char-setR? r)
-       (if (is:member? c (char-setR-chars r)) e z))
+       (if (loc:member? c (char-setR-chars r)) e z))
       ((concatR? r)
        (let* ((r1 (concatR-re1 r))
               (r2 (concatR-re2 r))
@@ -180,6 +180,8 @@
   (define (get-key s)
     (map (lambda (x) (re-index (car x))) s))  
           
+  (define loc:partition is:partition)
+  
   ;; compute-chars : (list-of state) -> (list-of char-set)
   ;; Computed the sets of equivalent characters for taking the
   ;; derivative of the car of st.  Only one derivative per set need to be taken.
@@ -187,7 +189,7 @@
     (cond
       ((null? st) null)
       (else
-       (is:partition (map char-setR-chars
+       (loc:partition (map char-setR-chars
                           (apply append (map (lambda (x) (get-char-groups (car x) #f))
                                              (state-spec (car st)))))))))
   
@@ -209,6 +211,8 @@
   ;; Each transitions is a state and a list of chars with the state to transition to.
   ;; The finals and transitions are sorted by state number, and duplicate free.
   (define-struct dfa (num-states start-state final-states/actions transitions) (make-inspector))
+  
+  (define loc:get-integer is:get-integer)
   
   ;; build-dfa : (list-of re-action) cache -> dfa
   (define (build-dfa rs cache)
@@ -243,7 +247,7 @@
           (else
            (let* ((state (car old-states))
                   (c (car cs))
-                  (new-re (derive (state-spec state) (is:get-integer c) cache)))
+                  (new-re (derive (state-spec state) (loc:get-integer c) cache)))
              (cond
                (new-re
                 (let* ((new-state? #f)

@@ -22,6 +22,7 @@
 ;  (define (dfa->1d-table dfa)
 ;    (let (
   
+  (define loc:foldr is:foldr)
   
   ;; dfa->2d-table : dfa -> (same as build-lexer)
   (define (dfa->2d-table dfa)
@@ -38,7 +39,7 @@
          (let ((from-state (car trans)))
            (for-each (lambda (chars/to)
                        (let ((to-state (cdr chars/to)))
-                         (is:foldr (lambda (char _)
+                         (loc:foldr (lambda (char _)
                                      (vector-set! char-table
                                                   (bitwise-ior 
                                                    char
@@ -98,13 +99,13 @@
 
            (cache (make-cache))
            
-           (re-acts (map (lambda (s-re-act)
-                           (cons (->re (car s-re-act) cache)
-                                 (cdr s-re-act)))
-                         s-re-acts))
+           (re-acts (time (map (lambda (s-re-act)
+                                 (cons (->re (car s-re-act) cache)
+                                       (cdr s-re-act)))
+                               s-re-acts)))
            
-           (dfa (build-dfa re-acts cache)))
+           (dfa (time (build-dfa re-acts cache))))
       ;(print-dfa dfa)
       ;(printf "states: ~a~n" (dfa-num-states dfa))
-      (values (dfa->2d-table dfa) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa))))
+      (values (time (dfa->2d-table dfa)) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa))))
   )

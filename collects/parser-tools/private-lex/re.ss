@@ -62,10 +62,15 @@
   ;;  The null or `(:) means match nothing.  The null carat `(^) means match
   ;;  any character.  The null intersection `(&) means match string.)
 
+  (define loc:make-range is:make-range)
+  (define loc:union is:union)
+  (define loc:split is:split)
+  (define loc:complement is:complement)
+  
   ;; ->re : s-re cache -> re
   (define (->re exp cache)
     (match exp
-      ((? char?) (build-char-set (is:make-range (char->integer exp)) cache))
+      ((? char?) (build-char-set (loc:make-range (char->integer exp)) cache))
       ((? string?) (->re `(@ ,@(string->list exp)) cache))
       ((? re?) exp)
       (`(epsilon) (build-epsilon))
@@ -80,12 +85,12 @@
               (build-or (list e c) cache))))
       (`(: ,rs ...)
         (build-or (flatten-res (map (lambda (r) (->re r cache)) rs)
-                               orR? orR-res is:union cache)
+                               orR? orR-res loc:union cache)
                   cache))
       (`(& ,rs ...)
         (build-and (flatten-res (map (lambda (r) (->re r cache)) rs)
                                 andR? andR-res (lambda (a b)
-                                                 (let-values (((i _ __) (is:split a b))) i))
+                                                 (let-values (((i _ __) (loc:split a b))) i))
                                 cache)
                    cache))
       (`(~ ,r)
@@ -99,14 +104,14 @@
         (let ((i1 (char->integer (if (string? c1) (string-ref c1 0) c1)))
               (i2 (char->integer (if (string? c2) (string-ref c2 0) c2))))
           (if (<= i1 i2)
-              (build-char-set (is:make-range i1 i2) cache)
+              (build-char-set (loc:make-range i1 i2) cache)
               z)))
       (`(^ ,crs ...)
         (let ((cs (->re `(: ,@crs) cache)))
           (cond
-            ((zeroR? cs) (build-char-set (is:make-range 0 255) cache))
+            ((zeroR? cs) (build-char-set (loc:make-range 0 255) cache))
             ((char-setR? cs)
-             (build-char-set (is:complement (char-setR-chars cs) 0 255) cache))
+             (build-char-set (loc:complement (char-setR-chars cs) 0 255) cache))
             (else z))))))
               
 
@@ -140,9 +145,11 @@
   
   (define (build-zero) z)
     
+  (define loc:integer-set-contents is:integer-set-contents)
+  
   ;; build-char-set : char-set cache -> re
   (define (build-char-set cs cache)
-    (let ((l (is:integer-set-contents cs)))
+    (let ((l (loc:integer-set-contents cs)))
       (cond
         ((null? l) z)
         (else
