@@ -184,37 +184,36 @@
   (define id (lambda (x) x))
 
   (define (do-match lb first-pos longest-match-length length longest-match-action wrap?)
-    (if (not longest-match-action)
-	(let* ((match (read-string length lb))
-	       (end-pos (get-position lb)))
-	  (if (not longest-match-action)
-	      (raise-read-error
-	       (format "lexer: No match found in input starting with: ~a" match)
-	       (file-path)
-	       (position-line first-pos)
-	       (position-col first-pos)
-	       (position-offset first-pos)
-	       (- (position-offset end-pos) (position-offset first-pos)))))
-	(let* ((match (read-string longest-match-length lb))
-	       (end-pos (get-position lb)))
-	  (cond
-	   (wrap?
-	    (let/ec ret
-	      (list (longest-match-action
-		     first-pos
-		     end-pos
-		     match
-		     ret
-		     lb) 
-		    first-pos 
-		    end-pos)))
-	   (else 
-	    (longest-match-action
-	     first-pos
-	     end-pos
-	     match
-	     id
-	     lb))))))
+    (unless longest-match-action
+      (let* ((match (read-string length lb))
+	     (end-pos (get-position lb)))
+	(raise-read-error
+	 (format "lexer: No match found in input starting with: ~a" match)
+	 (file-path)
+	 (position-line first-pos)
+	 (position-col first-pos)
+	 (position-offset first-pos)
+	 (- (position-offset end-pos) (position-offset first-pos)))))
+    (let* ((match (read-string longest-match-length lb))
+	   (end-pos (get-position lb)))
+      (cond
+       (wrap?
+	(let/ec ret
+	  (list (longest-match-action
+		 first-pos
+		 end-pos
+		 match
+		 ret
+		 lb) 
+		first-pos 
+		end-pos)))
+       (else 
+	(longest-match-action
+	 first-pos
+	 end-pos
+	 match
+	 id
+	 lb)))))
   
   
   (define-struct position (offset line col))
