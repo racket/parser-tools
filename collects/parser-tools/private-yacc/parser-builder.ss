@@ -43,14 +43,58 @@
            
            (parser-code
             `(letrec ((err ,error-expr)
-                      (term-sym->index ,token-code)
+                      (err-state 0)
                       (table ,table-code)
+                      (term-sym->index ,token-code)
                       (actions ,actions-code)
                       (reduce-stack
                        (lambda (s n v)
                          (if (> n 0)
-                             (reduce-stack (cdr (cdr s)) (sub1 n) (cons (cadr s) v))
-                             (values s v)))))
+                             (reduce-stack (cddr s) (sub1 n) (cons (cadr s) v))
+                             (values s v))))
+                      (fix-error
+                       (lambda (stack ip get-token)
+                         (let remove-states ()
+                           (let ((a (find-action stack 'error)))
+                             (cond
+                               ((shift? a)
+                                (printf "shift:~a~n" (shift-state a))
+                                (set! stack (cons (shift-state a) (cons #f stack))))
+                               (else
+                                (printf "discard-state:~a~n" (car stack))
+                                (cond
+                                  ((< (length stack) 3)
+                                   (printf "Unable to shift error token~n")
+                                   #f)
+                                  (else
+                                   (set! stack (cddr stack))
+                                   (remove-states)))))))
+                         (let remove-input ()
+                           (let ((a (find-action stack ip)))
+                             (cond
+                               ((shift? a)
+                                (printf "shift:~a~n" (shift-state a))
+                                (cons (shift-state a)
+                                      (cons (if (token? ip)
+                                                (token-value ip)
+                                                #f)
+                                            stack)))
+                               (else
+                                (printf "discard-input:~a~n" (if (token? ip)
+                                                                 (token-name ip)
+                                                                 ip))
+                                (set! ip (get-token))
+                                (remove-input)))))))
+                      
+                      (find-action
+                       (lambda (stack tok)
+                         (array2d-ref table 
+                                      (car stack)
+                                      (hash-table-get term-sym->index
+                                                      (if (token? tok)
+                                                          (token-name tok)
+                                                          tok)
+                                                      err)))))
                (lambda (get-token)
                  (let loop ((stack (list 0))
                             (ip (get-token)))
@@ -58,13 +102,7 @@
                    (newline)
                    (display (if (token? ip) (token-name ip) ip))
                    (newline)
-                   (let* ((s (car stack))
-                          (a (hash-table-get term-sym->index 
-                                             (if (token? ip)
-                                                 (token-name ip)
-                                                 ip)
-                                             err))
-                          (action (array2d-ref table s a)))
+                   (let ((action (find-action stack ip)))
                      (cond
                        ((shift? action)
                         (printf "shift:~a~n" (shift-state action))
@@ -89,8 +127,14 @@
                                               new-stack))
                                   ip))))
                        ((accept? action)
-                        (printf "accept~n"))
-                       (else (err)))))))))
+                        (printf "accept~n")
+                        (cadr stack))
+                       (else 
+                        (err)
+                        (let ((new-stack (fix-error stack ip get-token)))
+                          (if new-stack
+                              (loop new-stack (get-token))
+                              (void)))))))))))
       (datum->syntax-object
        runtime
        parser-code

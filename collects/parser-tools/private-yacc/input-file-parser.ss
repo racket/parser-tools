@@ -116,6 +116,7 @@
     (let* ((counter 0)
            
            (start-sym (syntax-object->datum start))
+                          
            
            (list-of-terms
             (syntax-case term-defs (tokens)
@@ -224,6 +225,7 @@
                             type)))
                      (syntax->list (syntax (type ...))))
                     (cdr (syntax-object->datum prec-decls))))))
+              (#f null)
               (_
                (raise-syntax-error
                 'parser-precedences
