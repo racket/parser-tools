@@ -94,18 +94,26 @@
 				      pos)))))))))))
       (lambda (stx)
 	(syntax-case stx ()
-          ((_ (re1 act1) (re act) ...)
-           (let* ((table (generate-table (syntax ((re1 act1) (re act) ...)) stx))
-                  (code
-                   `(let ((start-state ,(table-start table))
-                          (trans-table ,(table-trans table))
-                          (eof-table ,(table-eof table))
-                          (actions (vector ,@(vector->list (table-actions table)))))
-                      ,code)))
-             (datum->syntax-object #'here code #f)))
-          (_
-           (raise-syntax-error #f "Form should be (lexer (re act) ...) with at least 1 (re ast) pair" stx))))))
-  
+          ((_)
+           (raise-syntax-error #f "empty lexer is not allowed" stx))
+          ((_ re-act ...)
+           (begin
+             (for-each
+              (lambda (x)
+                (syntax-case x ()
+                  ((re act) (void))
+                  (_ (raise-syntax-error 'lexer 
+                                         "expects regular expression / action pairs"
+                                         x))))
+              (syntax->list (syntax (re-act ...))))
+             (let* ((table (generate-table (syntax (re-act ...)) stx))
+                    (code
+                     `(let ((start-state ,(table-start table))
+                            (trans-table ,(table-trans table))
+                            (eof-table ,(table-eof table))
+                            (actions (vector ,@(vector->list (table-actions table)))))
+                        ,code)))
+               (datum->syntax-object #'here code #f))))))))
   
   
   (define-syntax (define-lex-abbrev stx)
