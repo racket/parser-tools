@@ -40,7 +40,7 @@
                      
   
   (define (compute-ranges x?)
-    (get-chars-for (lambda (x) (x? (integer->char x))) mapped-chars))
+    (delay (get-chars-for (lambda (x) (x? (integer->char x))) mapped-chars)))
   
   (define alphabetic-ranges   (compute-ranges char-alphabetic?))  ;; 325
   (define lower-case-ranges   (compute-ranges char-lower-case?))  ;; 405

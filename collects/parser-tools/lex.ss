@@ -261,17 +261,17 @@
                                           `(: ,@(map (lambda (x) `(- ,(integer->char (car x))
                                                                      ,(integer->char (cdr x))))
                                                      range)))
-                                        (list alphabetic-ranges
-                                              lower-case-ranges
-                                              upper-case-ranges
-                                              title-case-ranges
-                                              numeric-ranges
-                                              symbolic-ranges
-                                              punctuation-ranges
-                                              graphic-ranges
-                                              whitespace-ranges
-                                              blank-ranges
-                                              iso-control-ranges)))
+                                        (list (force alphabetic-ranges)
+                                              (force lower-case-ranges)
+                                              (force upper-case-ranges)
+                                              (force title-case-ranges)
+                                              (force numeric-ranges)
+                                              (force symbolic-ranges)
+                                              (force punctuation-ranges)
+                                              (force graphic-ranges)
+                                              (force whitespace-ranges)
+                                              (force blank-ranges)
+                                              (force iso-control-ranges))))
                      ((names ...) (map (lambda (sym)
                                          (datum->syntax-object (syntax ctxt) sym #f))
                                        '(alphabetic
