@@ -12,7 +12,9 @@
 
   (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs
 	   position-offset position-line position-col position?
-           define-tokens define-empty-tokens)
+           define-tokens define-empty-tokens file-path)
+  
+  (define file-path (make-parameter #f))
   
   (define-syntaxes (lexer-exp lexer-src-pos-exp)
     (let ((build-lexer
@@ -188,7 +190,7 @@
 	  (if (not longest-match-action)
 	      (raise-read-error
 	       (format "lexer: No match found in input starting with: ~a" match)
-	       #f
+	       (file-path)
 	       (position-line first-pos)
 	       (position-col first-pos)
 	       (position-offset first-pos)
