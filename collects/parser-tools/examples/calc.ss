@@ -31,7 +31,7 @@
    [(eof) 'EOF]
    ;; recursively call the lexer on the remaining input after a tab or space.  Returning the
    ;; result of that operation.  This effectively skips all whitespace.
-   [(: #\tab #\space) (calcl lex-buf)]
+   [(: #\tab #\space) (calcl input-port)]
    ;; The parser will treat the return of 'newline the same as (token-newline)
    [#\newline 'newline]
    [(: = + - * / ^) (string->symbol (get-lexeme))]
@@ -84,13 +84,11 @@
            
 ;; run the calculator on the given input-port       
 (define (calc ip)
-  ;; Make the lex-buffer
-  (let ((lb (make-lex-buf ip)))
-    (letrec ((one-line
-              (lambda ()
-                (let ((result (calcp (lambda () (calcl lb)))))
-                  (if result
-                      (begin
-                        (printf "~a~n" result)
-                        (one-line)))))))
-      (one-line))))
+  (letrec ((one-line
+	    (lambda ()
+	      (let ((result (calcp (lambda () (calcl ip)))))
+		(if result
+		    (begin
+		      (printf "~a~n" result)
+		      (one-line)))))))
+    (one-line))))

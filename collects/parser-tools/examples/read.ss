@@ -17,7 +17,7 @@
     (lexer-src-pos
      
      ;; Skip comments, without accumulating extra position information
-     [(: (whitespace) (comment)) (return-without-pos (scheme-lexer lex-buf))]
+     [(: (whitespace) (comment)) (return-without-pos (scheme-lexer input-port))]
 
      ["#t" (token-DATUM #t)]
      ["#f" (token-DATUM #f)]
@@ -25,7 +25,7 @@
      ["#\\space" (token-DATUM #\space)]
      ["#\\newline" (token-DATUM #\newline)]
      [(: (@ (initial) (* (subsequent))) + - "...") (token-DATUM (string->symbol (get-lexeme)))]
-     [#\" (token-DATUM (list->string (get-string-token lex-buf)))]
+     [#\" (token-DATUM (list->string (get-string-token input-port)))]
      [#\( 'OP]
      [#\) 'CP]
      [#\[ 'OP]
@@ -45,9 +45,9 @@
   (define get-string-token
     (lexer
      [(^ #\" #\\) (cons (car (string->list (get-lexeme)))
-			(get-string-token lex-buf))]
-     [(@ #\\ #\\) (cons #\\ (get-string-token lex-buf))]
-     [(@ #\\ #\") (cons #\" (get-string-token lex-buf))]
+			(get-string-token input-port))]
+     [(@ #\\ #\\) (cons #\\ (get-string-token input-port))]
+     [(@ #\\ #\") (cons #\" (get-string-token input-port))]
      [#\" null]))
   
   
@@ -233,8 +233,7 @@
                  [(sexp-list sexp) (cons $2 $1)]))))
   
   (define (rs sn ip off)
-    (let ((lb (make-lex-buf ip off)))
-      ((scheme-parser sn) (lambda () (scheme-lexer lb)))))
+    ((scheme-parser sn) (lambda () (scheme-lexer ip)))))
   
   (define readsyntax
     (case-lambda ((sn) (rs sn (current-input-port) (list 0 0 0)))
