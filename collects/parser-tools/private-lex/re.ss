@@ -11,6 +11,8 @@
            andR-res negR-re
            re-nullable? re-index)
   
+  (define max-char-num #x7FFFFFFF)
+  
   ;; get-index : -> nat
   (define get-index (make-counter))
 
@@ -109,9 +111,9 @@
       (`(^ ,crs ...)
         (let ((cs (->re `(: ,@crs) cache)))
           (cond
-            ((zeroR? cs) (build-char-set (loc:make-range 0 255) cache))
+            ((zeroR? cs) (build-char-set (loc:make-range 0 max-char-num) cache))
             ((char-setR? cs)
-             (build-char-set (loc:complement (char-setR-chars cs) 0 255) cache))
+             (build-char-set (loc:complement (char-setR-chars cs) 0 max-char-num) cache))
             (else z))))))
               
 

@@ -292,13 +292,12 @@
       (resolve-prec-conflicts a table get-term get-prod num-terms
                               num-non-terms)
       (if (not (string=? file ""))
-          (with-handlers [(exn:i/o:filesystem?
+          (with-handlers [(exn:fail:filesystem?
                            (lambda (e)
                              (fprintf 
                               (current-error-port)
-                              "Cannot write debug output to file \"~a\".  ~a~n"
-                              (exn:i/o:filesystem-pathname e)
-                              (exn:i/o:filesystem-detail e))))]
+                              "Cannot write debug output to file \"~a\".~n"
+                              file)))]
             (call-with-output-file file
               (lambda (port)
                 (display-parser a table get-term get-non-term (send g get-prods)

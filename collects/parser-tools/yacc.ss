@@ -131,13 +131,12 @@
                                      grammar
                                      stx)))
            (when (and yacc-output (not (string=? yacc-output "")))
-             (with-handlers [(exn:i/o:filesystem?
+             (with-handlers [(exn:fail:filesystem?
                               (lambda (e)
                                 (fprintf 
                                  (current-error-port)
-                                 "Cannot write yacc-output to file \"~a\".  ~a~n"
-                                 (exn:i/o:filesystem-pathname e)
-                                 (exn:i/o:filesystem-detail e))))]
+                                 "Cannot write yacc-output to file \"~a\"~n"
+                                 yacc-output)))]
                (call-with-output-file yacc-output
                  (lambda (port)
                    (display-yacc (syntax-object->datum grammar) 
