@@ -64,6 +64,18 @@
                            "End token must be a symbol"
                            sym)))
                     (syntax->list (syntax (symbols ...))))
+                   (let ((d (duplicate-list? (syntax-object->datum 
+                                              (syntax (symbols ...))))))
+                     (if d
+                         (raise-syntax-error
+                          'parser-end
+                          (format "Duplicate end token definition for ~a" d)
+                          arg)))
+                   (if (= 0 (length (syntax->list (syntax (symbols ...)))))
+                       (raise-syntax-error
+                        'parser-end
+                        "end declaration must contain at least 1 token"
+                        arg))
                    (if end
                        (raise-syntax-error #f "Multiple end declarations" stx))
                    (set! end (syntax->list (syntax (symbols ...))))))

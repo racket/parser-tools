@@ -40,13 +40,21 @@
   ;;   action array2d * term vector * non-term vector * kernel vector * 
   ;;     output-port ->
   ;; Prints out the parser given by table.
-  (define (display-parser table terms non-terms states port)
+  (define (display-parser table terms non-terms states prods port)
     (let* ((num-terms (vector-length terms))
 	   (num-non-terms (vector-length non-terms))
 	   (num-gram-syms (+ num-terms num-non-terms))
 	   (num-states (vector-length states))
 	   (SR-conflicts 0)
 	   (RR-conflicts 0))
+      (for-each
+       (lambda (prod)
+         (fprintf port 
+                  "~a\t~a\t=\t~a~n" 
+                  (prod-index prod)
+                  (gram-sym-symbol (prod-lhs prod))
+                  (map gram-sym-symbol (vector->list (prod-rhs prod)))))
+       prods)
       (let loop ((i 0))
 	(if (< i num-states)
 	    (begin
@@ -278,7 +286,8 @@
 			      (exn:i/o:filesystem-detail e))))]
 	    (call-with-output-file file
 	      (lambda (port)
-		(display-parser table get-term get-non-term get-state port)))))
+		(display-parser table get-term get-non-term get-state (grammar-prods g)
+                                port)))))
       (resolve-conflicts table num-states num-terms num-non-terms)
       table))
 )

@@ -235,7 +235,7 @@
            (terms (build-terms list-of-terms precs))
            
            (non-terms (begin
-                        (set! counter 1)
+                        (set! counter 2)
                         (map (lambda (non-term)
                                (begin0
                                  (make-non-term non-term counter)
@@ -251,8 +251,6 @@
       (for-each (lambda (nt)
 		  (hash-table-put! non-term-table (gram-sym-symbol nt) nt))
 		non-terms)
-      
-      (set! counter 1)
       
       (let* (
 	     ;; parse-prod: syntax-object -> gram-sym vector
@@ -299,41 +297,39 @@
                 (syntax-case prod-so (prec)
                   ((prod-rhs action)
                    (let ((p (parse-prod (syntax prod-rhs))))
-                     (begin0
-                       (make-prod 
-                        nt 
-                        p
-                        counter 
-                        (let loop ((i (sub1 (vector-length p))))
-                          (if (>= i 0)
-                              (let ((gs (vector-ref p i)))
-                                (if (term? gs)
-                                    (term-prec gs)
-                                    (loop (sub1 i))))
-                              #f))
-                        (parse-action p (syntax action)))
-                       (set! counter (add1 counter)))))
+                     (set! counter (add1 counter))
+                     (make-prod 
+                      nt
+                      p
+                      counter 
+                      (let loop ((i (sub1 (vector-length p))))
+                        (if (>= i 0)
+                            (let ((gs (vector-ref p i)))
+                              (if (term? gs)
+                                  (term-prec gs)
+                                  (loop (sub1 i))))
+                            #f))
+                      (parse-action p (syntax action)))))
                   ((prod-rhs (prec term) action)
                    (identifier? (syntax term))
                    (let ((p (parse-prod (syntax prod-rhs))))
-                     (begin0
-                       (make-prod 
-                        nt 
-                        p
-                        counter
-                        (term-prec
-                         (hash-table-get 
-                          term-table 
-                          (syntax-object->datum (syntax term))
-                          (lambda ()
-                            (raise-syntax-error
-                             'parser-production-rhs
-                             (format
-                              "unrecognized terminal ~a in precedence declaration"
-                              (syntax-object->datum (syntax term)))
-                             (syntax term)))))
-                        (parse-action p (syntax action)))
-                       (set! counter (add1 counter)))))
+                     (set! counter (add1 counter))
+                     (make-prod 
+                      nt 
+                      p
+                      counter
+                      (term-prec
+                       (hash-table-get 
+                        term-table 
+                        (syntax-object->datum (syntax term))
+                        (lambda ()
+                          (raise-syntax-error
+                           'parser-production-rhs
+                           (format
+                            "unrecognized terminal ~a in precedence declaration"
+                            (syntax-object->datum (syntax term)))
+                           (syntax term)))))
+                      (parse-action p (syntax action)))))
                   (_
                    (raise-syntax-error
                     'parser-production-rhs
@@ -357,24 +353,31 @@
                     "A production for a non-terminal must be (non-term right-hand-side ...) with at least 1 right hand side"
                     prods-so))))))
 	
-        (let* ((start (make-non-term 'Start 0))
+        (set! counter 0)
+        (let* ((start (make-non-term (gensym) 0))
+               (end-non-term (make-non-term (gensym) 1))
                (prods 
-                (cons
-                 (list (make-prod start
-                                  (vector (hash-table-get non-term-table start-sym)
-                                          (hash-table-get term-table (car end-terms)))
-                                  0
-                                  #f
-                                  (datum->syntax-object
-                                   runtime
-                                   `(lambda (x) x))))
-                 (map parse-prods-for-nt (cdr (syntax->list prods)))))
+                `((,(make-prod start (vector end-non-term) 0 #f #f))
+                  ,(map
+                    (lambda (end)
+                      (set! counter (add1 counter))
+                      (make-prod end-non-term
+                                 (vector
+                                  (hash-table-get non-term-table start-sym)
+                                  (hash-table-get term-table end))
+                                 counter
+                                 #f
+                                 (datum->syntax-object
+                                  runtime
+                                  `(lambda (x) x))))
+                    end-terms)
+                  ,@(map parse-prods-for-nt (cdr (syntax->list prods)))))
                (nulls (nullable (apply append prods) 
-                                (add1 (length non-terms)))))
+                                (+ 2 (length non-terms)))))
           
           
 ;          (printf "nullable: {~a}~n~n"
-;                  (apply string-append 
+;                  (apply string-append
 ;                         (let loop ((i 0))
 ;                           (cond
 ;                             ((>= i (vector-length nulls)) null)
@@ -389,7 +392,7 @@
            (list->vector prods)
            (apply append prods)
            nulls
-           (cons start non-terms)
+           (cons start (cons end-non-term non-terms))
            terms
-           counter
+           (add1 counter)
            end-terms))))))
