@@ -214,7 +214,7 @@
              
              (fix-error
               (lambda (stack tok ip get-token)
-                (printf "stack: ~a~n" stack)
+                ;;(printf "stack: ~a~n" stack)
                 (letrec ((remove-input
                           (lambda ()
                             (if (memq (token-name tok) ends)
@@ -223,7 +223,7 @@
                                 (let ((a (find-action stack tok ip)))
                                   (cond
                                     ((shift? a)
-                                     (printf "shift:~a~n" (shift-state a))
+                                     ;;(printf "shift:~a~n" (shift-state a))
                                      (cons (if src-pos
                                                (make-stack-frame (shift-state a)
                                                                  (token-value tok)
@@ -235,7 +235,7 @@
                                                                  #f))
                                            stack))
                                     (else
-                                     (printf "discard input:~a~n" tok)
+                                     ;;(printf "discard input:~a~n" tok)
                                      (set! ip (get-token))
                                      (set! tok (input->token ip))
                                      (remove-input)))))))
@@ -244,7 +244,7 @@
                             (let ((a (find-action stack (make-token 'error #f) ip)))
                               (cond
                                 ((shift? a)
-                                 (printf "shift:~a~n" (shift-state a))
+                                 ;;(printf "shift:~a~n" (shift-state a))
                                  (set! stack 
                                        (cons
                                         (if src-pos
@@ -259,7 +259,7 @@
                                         stack))
                                  (remove-input))
                                 (else
-                                 (printf "discard state:~a~n" (car stack))
+                                 ;;(printf "discard state:~a~n" (car stack))
                                  (cond
                                    ((< (length stack) 2)
                                     (raise-read-error "parser: Cannot continue after error"
