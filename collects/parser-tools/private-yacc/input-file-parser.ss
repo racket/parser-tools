@@ -368,20 +368,21 @@
                      start-sym)
              start))
                  
-        (set! counter 1)
+        (set! counter (length end-terms))
         (let* ((start (make-non-term (gensym) 0))
                (end-non-term (make-non-term (gensym) 1))
                (parsed-prods (map parse-prods-for-nt (cdr (syntax->list prods))))
+               (counter2 0)
                (prods 
                 `((,(make-prod start (vector end-non-term) 0 #f #f))
                   ,(map
                     (lambda (end)
-                      (set! counter (add1 counter))
+                      (set! counter2 (add1 counter2))
                       (make-prod end-non-term
                                  (vector
                                   (hash-table-get non-term-table start-sym)
                                   (hash-table-get term-table end))
-                                 1
+                                 counter2
                                  #f
                                  (datum->syntax-object
                                   runtime
