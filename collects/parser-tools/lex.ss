@@ -232,8 +232,7 @@
                         (do-match ip first-pos special-comment-action #f))
                        (else (lexer ip))))
                     ((not (char? first-char))
-                     (let ((spec (read-char-or-special ip)))
-                       (do-match ip first-pos special-action (read-char-or-special ip))))
+                     (do-match ip first-pos special-action (read-char-or-special ip)))
                     (else
                      (let lexer-loop (
                                       ;; current-state
