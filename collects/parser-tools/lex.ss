@@ -40,23 +40,19 @@
                                     (actions-stx `(vector ,@(vector->list (table-actions table)))))
                         (if wrap?
                             (syntax 
-                             (let-values (((a b c d e)
-                                           (values start-state-stx 
-                                                   trans-table-stx
-                                                   eof-table-stx
-                                                   actions-stx
-                                                   no-lookahead-stx)))
-                               (lambda (lb)
-                                 (lexer-body lb a b c d e #t))))
+                             (lexer-body start-state-stx 
+                                         trans-table-stx
+                                         eof-table-stx
+                                         actions-stx
+                                         no-lookahead-stx
+                                         #t))
                             (syntax 
-                             (let-values (((a b c d e)
-                                           (values start-state-stx 
-                                                   trans-table-stx
-                                                   eof-table-stx
-                                                   actions-stx
-                                                   no-lookahead-stx)))
-                               (lambda (lb)
-                                 (lexer-body lb a b c d e #f))))))))))))))
+                             (lexer-body start-state-stx 
+                                         trans-table-stx
+                                         eof-table-stx
+                                         actions-stx
+                                         no-lookahead-stx
+                                         #f))))))))))))
       (values
        (build-lexer #f)
        (build-lexer #t))))
@@ -100,58 +96,59 @@
 
 
   
-  (define (lexer-body lb start-state trans-table eof-table actions no-lookahead wrap?)
-    (unless (lex-buffer? lb)
-      (raise-type-error 
-       'lexer 
-       "lex-buf"
-       0
-       lb))
-    (let ((first-pos (get-position lb)))
-      (let lexer-loop (
-                       ;; current-state
-                       (state start-state)
-                       ;; the character to transition on
-                       (char (next-char lb))
-                       ;; action for the longest match seen thus far
-                       ;; including a match at the current state
-                       (longest-match-action 
-                        (vector-ref actions start-state))
-                       ;; how many characters have been read
-                       ;; including the one just read
-                       (length 1)
-                       ;; how many characters are in the longest match
-                       (longest-match-length 1))
-        (let ((next-state
-               (cond
-                 ((eof-object? char)
-                  (vector-ref eof-table state))
-                 (else
-                  (vector-ref 
-                   trans-table
-                   (bitwise-ior (char->integer char)
-                                (arithmetic-shift state 8)))))))
-          (cond
-            ((not next-state)
-             (do-match lb first-pos longest-match-length longest-match-action wrap?))
-            ((vector-ref no-lookahead next-state)
-             (let ((act (vector-ref actions next-state)))
-               (do-match lb 
-                 first-pos 
-                 (if act length longest-match-length)
-                 (if act act longest-match-action)
-                 wrap?)))
-            (else
-             (let ((act (vector-ref actions next-state)))
-               (lexer-loop next-state 
-                           (next-char lb)
-                           (if act
-                               act
-                               longest-match-action)
-                           (add1 length)
-                           (if act
-                               length
-                               longest-match-length)))))))))
+  (define (lexer-body start-state trans-table eof-table actions no-lookahead wrap?)
+    (lambda (lb)
+      (unless (lex-buffer? lb)
+        (raise-type-error 
+         'lexer 
+         "lex-buf"
+         0
+         lb))
+      (let ((first-pos (get-position lb)))
+        (let lexer-loop (
+                         ;; current-state
+                         (state start-state)
+                         ;; the character to transition on
+                         (char (next-char lb))
+                         ;; action for the longest match seen thus far
+                         ;; including a match at the current state
+                         (longest-match-action 
+                          (vector-ref actions start-state))
+                         ;; how many characters have been read
+                         ;; including the one just read
+                         (length 1)
+                         ;; how many characters are in the longest match
+                         (longest-match-length 1))
+          (let ((next-state
+                 (cond
+                   ((eof-object? char)
+                    (vector-ref eof-table state))
+                   (else
+                    (vector-ref 
+                     trans-table
+                     (bitwise-ior (char->integer char)
+                                  (arithmetic-shift state 8)))))))
+            (cond
+              ((not next-state)
+               (do-match lb first-pos longest-match-length longest-match-action wrap?))
+              ((vector-ref no-lookahead next-state)
+               (let ((act (vector-ref actions next-state)))
+                 (do-match lb 
+                           first-pos 
+                           (if act length longest-match-length)
+                           (if act act longest-match-action)
+                           wrap?)))
+              (else
+               (let ((act (vector-ref actions next-state)))
+                 (lexer-loop next-state 
+                             (next-char lb)
+                             (if act
+                                 act
+                                 longest-match-action)
+                             (add1 length)
+                             (if act
+                                 length
+                                 longest-match-length))))))))))
 
   (define (do-match lb first-pos longest-match-length longest-match-action wrap?)
     (let* ((match (get-match lb longest-match-length))
