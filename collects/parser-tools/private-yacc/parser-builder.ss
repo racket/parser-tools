@@ -4,8 +4,7 @@
   (require "input-file-parser.ss"
            "table.ss"
            "parser-actions.ss"
-           "grammar.ss"
-           (lib "pretty.ss"))
+           "grammar.ss")
   
   (provide build-parser)
   
@@ -48,9 +47,9 @@
                              (pop-2x (cdr (cdr s)) (sub1 n))
                              s))))
                (lambda (get-token)
-                 (let loop ((stack (list 0)))
-                   (let* ((next (get-token))
-                          (s (car stack))
+                 (let loop ((stack (list 0))
+                            (next (get-token)))
+                   (let* ((s (car stack))
                           (a (hash-table-get term-sym->index 
                                              (if (token? next)
                                                  (token-name next)
@@ -58,18 +57,16 @@
                           (action (array2d-ref table s a)))
                      (cond
                        ((shift? action)
-                        (loop (cons (shift-state action) (cons a stack))))
+                        (loop (cons (shift-state action) (cons a stack)) (get-token)))
                        ((reduce? action)
-                        (display (reduce-prod-num action))
-                        (newline)
+                        (printf "reduce:~a~n" (reduce-prod-num action))
                         (let* ((A (reduce-lhs-num action))
                                (new-stack (pop-2x stack (reduce-rhs-length action)))
                                (goto (array2d-ref table (car new-stack) A)))
-                          (loop (cons goto (cons A new-stack)))))
+                          (loop (cons goto (cons A new-stack)) next)))
                        ((accept? action)
-                        (printf "accept~n")))))))))
-      (pretty-print parser-code)
-      (newline)
+                        (printf "accept~n"))
+                       (else (error 'parser)))))))))
       (datum->syntax-object
        runtime
        parser-code
