@@ -3,14 +3,16 @@
   ;; Provides the syntax used to create lexers and the functions needed to
   ;; create and use the buffer that the lexer reads from.  See doc.txt.
 	
-  (require-for-syntax (lib "define.ss" "syntax")
+  (require-for-syntax (lib "list.ss")
+                      (lib "define.ss" "syntax")
+                      (lib "boundmap.ss" "syntax")
                       "private-lex/util.ss"
                       "private-lex/actions.ss"
                       "private-lex/front.ss"
                       "private-lex/unicode-chars.ss")
-                      
 
-  (require (lib "readerr.ss" "syntax")
+  (require (lib "stxparam.ss")
+           (lib "readerr.ss" "syntax")
            "private-lex/token.ss")
 
   (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs define-lex-trans
@@ -31,70 +33,91 @@
            char-set)
   
   (define file-path (make-parameter #f))
-  
-  (define-syntaxes (lexer lexer-src-pos)
-    (let ((build-lexer
-	   (lambda (wrap?)
-	     (lambda (stx)
-	       (syntax-case stx ()
-		 ((_)
-		  (raise-syntax-error #f "accepts the empty string" stx))
-		 ((_ re-act ...)
-		  (begin
-		    (for-each
-		     (lambda (x)
-		       (syntax-case x ()
-			 ((re act) (void))
-			 (_ (raise-syntax-error #f
-						"not a regular expression / action pair"
-                                                stx
-						x))))
-		     (syntax->list (syntax (re-act ...))))
-                    (let* ((spec/re-act-lst
-                            (syntax->list (syntax (re-act ...))))
-                           (eof-act
-                            (get-special-action spec/re-act-lst 'eof #''eof))
-                           (spec-act 
-                            (get-special-action spec/re-act-lst 'special #'(void)))
-                           (spec-error-act
-                            (get-special-action spec/re-act-lst 'special-error #'(raise exception)))
-                           (spec-comment-act 
-                            (get-special-action spec/re-act-lst 'special-comment #'#f))
-                           (re-act-lst
-                            (filter-out-specials spec/re-act-lst
-                                                 '(special special-comment special-error eof))))
-                      (let-values (((trans start actions no-look)
-                                    (build-lexer re-act-lst)))
-                        (with-syntax ((start-state-stx start)
-                                      (trans-table-stx trans)
-                                      (no-lookahead-stx no-look)
-                                      (actions-stx `(vector ,@(map (lambda (a)
-                                                                     (if a (wrap-action a 'lexeme #'here a) #f))
-                                                                   (vector->list actions))))
-                                      (spec-act-stx
-                                       (wrap-action spec-act 'special #'here spec-act))
-                                      (spec-error-act-stx
-                                       (wrap-action spec-error-act 'exception #'here spec-error-act))
-                                      (has-comment-act?-stx (if (syntax-e spec-comment-act) #t #f))
-                                      (spec-comment-act-stx
-                                       (wrap-action spec-comment-act (gensym) #'here spec-comment-act))
-                                      (eof-act-stx
-                                       (wrap-action eof-act 'lexeme #'here eof-act))
-                                      (wrap? wrap?))
-                          (syntax 
-                           (lexer-body start-state-stx 
-                                       trans-table-stx
-                                       actions-stx
-                                       no-lookahead-stx
-                                       spec-act-stx
-                                       spec-error-act-stx
-                                       has-comment-act?-stx
-                                       spec-comment-act-stx
-                                       eof-act-stx
-                                       wrap?))))))))))))
-      (values
-       (build-lexer #f)
-       (build-lexer #t))))
+             
+  ;; wrap-action: syntax-object -> syntax-object
+  (define-for-syntax (wrap-action action)
+    (with-syntax ((action-stx action))
+      (syntax/loc action
+        (lambda (start-pos-p end-pos-p lexeme-p return-without-pos-p input-port-p)
+          (syntax-parameterize 
+           ((start-pos (lambda (x) #'start-pos-p))
+            (end-pos (lambda (x) #'end-pos-p))
+            (lexeme (lambda (x) #'lexeme-p))
+            (return-without-pos (lambda (x) #'return-without-pos-p))
+            (input-port (lambda (x) #'input-port-p)))
+           action-stx)))))
+        
+  (define-for-syntax (make-lexer-trans wrap?)
+    (lambda (stx)
+      (syntax-case stx ()
+        ((_)
+         (raise-syntax-error #f "accepts the empty string" stx))
+        ((_ re-act ...)
+         (begin
+           (for-each
+            (lambda (x)
+              (syntax-case x ()
+                ((re act) (void))
+                (_ (raise-syntax-error #f
+                                       "not a regular expression / action pair"
+                                       stx
+                                       x))))
+            (syntax->list (syntax (re-act ...))))
+           (let* ((spec/re-act-lst
+                   (syntax->list (syntax (re-act ...))))
+                  (eof-act
+                   (get-special-action spec/re-act-lst #'eof #''eof))
+                  (spec-act 
+                   (get-special-action spec/re-act-lst #'special #'(void)))
+                  (spec-error-act
+                   (get-special-action spec/re-act-lst #'special-error #'(raise lexeme)))
+                  (spec-comment-act 
+                   (get-special-action spec/re-act-lst #'special-comment #'#f))
+                  (ids (list #'special #'special-comment #'special-error #'eof))
+                  (re-act-lst
+                   (filter
+                    (lambda (spec/re-act)
+                      (syntax-case spec/re-act ()
+                        (((special) act)
+                           (not (ormap
+                                 (lambda (x)
+                                   (module-identifier=? (syntax special) x))
+                                 ids)))
+                        (_ #t)))
+                    spec/re-act-lst)))
+             (let-values (((trans start actions no-look)
+                           (build-lexer re-act-lst)))
+               (with-syntax ((start-state-stx start)
+                             (trans-table-stx trans)
+                             (no-lookahead-stx no-look)
+                             (actions-stx
+                              `(vector ,@(map (lambda (a)
+                                                (if a (wrap-action a) #f))
+                                              (vector->list actions))))
+                             (spec-act-stx
+                              (wrap-action spec-act))
+                             (spec-error-act-stx
+                              (wrap-action spec-error-act))
+                             (has-comment-act?-stx 
+                              (if (syntax-e spec-comment-act) #t #f))
+                             (spec-comment-act-stx
+                              (wrap-action spec-comment-act))
+                             (eof-act-stx (wrap-action eof-act))
+                             (wrap? wrap?))
+                 (syntax 
+                  (lexer-body start-state-stx 
+                              trans-table-stx
+                              actions-stx
+                              no-lookahead-stx
+                              spec-act-stx
+                              spec-error-act-stx
+                              has-comment-act?-stx
+                              spec-comment-act-stx
+                              eof-act-stx
+                              wrap?))))))))))
+
+  (define-syntax lexer (make-lexer-trans #f))
+  (define-syntax lexer-src-pos (make-lexer-trans #t))
     
   (define-syntax (define-lex-abbrev stx)
     (syntax-case stx ()
@@ -112,22 +135,20 @@
   (define-syntax (define-lex-abbrevs stx)
     (syntax-case stx ()
       ((_ x ...)
-       (let* ((abbrev (syntax->list (syntax (x ...))))
-              (r (map (lambda (a)
-                        (syntax-case a ()
-                          ((name re)
-                           (identifier? (syntax name))
-                           (syntax (define-lex-abbrev name re)))
-                          (_ (raise-syntax-error
-                              #f
-                              "form should be (define-lex-abbrevs (name re) ...)"
-                              stx
-                              a))))
-                      abbrev)))
-         (datum->syntax-object
-          #'here
-          (cons 'begin r)
-          stx)))
+       (with-syntax (((abbrev ...)
+                      (map 
+                       (lambda (a)
+                         (syntax-case a ()
+                           ((name re)
+                            (identifier? (syntax name))
+                            (syntax (define-lex-abbrev name re)))
+                           (_ (raise-syntax-error
+                               #f
+                               "form should be (define-lex-abbrevs (name re) ...)"
+                               stx
+                               a))))
+                       (syntax->list (syntax (x ...))))))
+         (syntax/loc stx (begin abbrev ...))))
       (_
        (raise-syntax-error
         #f
@@ -324,11 +345,27 @@
   (create-unicode-abbrevs #'here)
   
   (define-lex-trans (char-set stx)
-    (syntax-case stx ()
-      ((_ str)
+                    (syntax-case stx ()
+                      ((_ str)
        (string? (syntax-e (syntax str)))
        (with-syntax (((char ...) (string->list (syntax-e (syntax str)))))
          (syntax (union char ...))))))
+
+  (define-syntax provide-lex-keyword
+    (syntax-rules ()
+      [(_ id ...)
+       (begin
+	 (define-syntax-parameter id
+           (make-set!-transformer
+            (lambda (stx)
+              (raise-syntax-error
+               #f
+               (format "use of a lexer keyword (~a) is not in an appropriate lexer action"
+                       'id)
+               stx))))
+	 ...
+	 (provide id ...))]))
   
+  (provide-lex-keyword start-pos end-pos lexeme input-port return-without-pos)
 
 )
