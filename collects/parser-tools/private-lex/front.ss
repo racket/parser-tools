@@ -126,11 +126,13 @@
               ((dfa->no-look d1) (vector #t))
               ((dfa->no-look d2) (vector #t #f #f #t)))
 
-  ;; build-lexer : syntax-object list -> (values table nat (vector-of (union #f syntax-object)) (vector-of bool))
+  ;; build-lexer : syntax-object list ->
+  ;;   (values table nat (vector-of (union #f syntax-object)) (vector-of bool) (list-of syntax-object))
   ;; each syntax object has the form (re action)
   (define (build-lexer sos)
-    (let* ((s-re-acts (map (lambda (so)
-                             (cons (parse (car (syntax->list so)))
+    (let* ((disappeared-uses (box null))
+           (s-re-acts (map (lambda (so)
+                             (cons (parse (car (syntax->list so)) disappeared-uses)
                                    (cadr (syntax->list so))))
                            sos))
 
@@ -144,5 +146,6 @@
            (dfa (build-dfa re-acts cache)))
       ;(print-dfa dfa)
       ;(printf "states: ~a~n" (dfa-num-states dfa))
-      (values (dfa->1d-table dfa) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa))))
+      (values (dfa->1d-table dfa) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa)
+              (unbox disappeared-uses))))
   )

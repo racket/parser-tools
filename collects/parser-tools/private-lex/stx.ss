@@ -1,5 +1,6 @@
 (module stx mzscheme
-  (require "util.ss")
+  (require (lib "boundmap.ss" "syntax")
+           "util.ss")
   
   (provide parse)
 
@@ -28,10 +29,13 @@
               ((char-range-arg #'"1" #'here) (char->integer #\1)))
   
   
-  ;; parse : syntax-object -> s-re (see re.ss)
+  ;; parse : syntax-object (box (list-of syntax-object)) -> s-re (see re.ss)
   ;; checks for errors and generates the plain s-exp form for s
   ;; Expands lex-abbrevs and applies lex-trans.
-  (define (parse stx)
+  (define (parse stx disappeared-uses)
+    (let ((parse
+           (lambda (stx)
+             (parse stx disappeared-uses))))
     (syntax-case stx (repetition union intersection complement concatenation
                       char-range char-complement)
       (_
@@ -41,6 +45,7 @@
            (raise-syntax-error 'regular-expression
                                "undefined abbreviation"
                                stx))
+         (set-box! disappeared-uses (cons stx (unbox disappeared-uses)))
          (parse (lex-abbrev-abbrev expansion))))
       (_
        (or (char? (syntax-e stx)) (string? (syntax-e stx)))
@@ -105,7 +110,9 @@
            `(char-complement ,parsed))))
        ((op form ...)
         (identifier? (syntax op))
-        (let ((expansion (syntax-local-value (syntax op) (lambda () #f))))
+        (let* ((o (syntax op))
+               (expansion (syntax-local-value o (lambda () #f))))
+          (set-box! disappeared-uses (cons o (unbox disappeared-uses)))
           (cond
             ((lex-trans? expansion)
              (parse ((lex-trans-f expansion) stx)))
@@ -121,7 +128,7 @@
        (raise-syntax-error
         'regular-expression
         "not a char, string, identifier, or (op args ...)"
-        stx))))
+        stx)))))
        
 
   

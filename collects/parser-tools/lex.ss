@@ -85,7 +85,7 @@
                                  ids)))
                         (_ #t)))
                     spec/re-act-lst)))
-             (let-values (((trans start actions no-look)
+             (let-values (((trans start actions no-look disappeared-uses)
                            (build-lexer re-act-lst)))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
@@ -104,17 +104,20 @@
                               (wrap-action spec-comment-act))
                              (eof-act-stx (wrap-action eof-act))
                              (wrap? wrap?))
-                 (syntax 
-                  (lexer-body start-state-stx 
-                              trans-table-stx
-                              actions-stx
-                              no-lookahead-stx
-                              spec-act-stx
-                              spec-error-act-stx
-                              has-comment-act?-stx
-                              spec-comment-act-stx
-                              eof-act-stx
-                              wrap?))))))))))
+                 (syntax-property
+                  (syntax/loc stx
+                   (lexer-body start-state-stx 
+                               trans-table-stx
+                               actions-stx
+                               no-lookahead-stx
+                               spec-act-stx
+                               spec-error-act-stx
+                               has-comment-act?-stx
+                               spec-comment-act-stx
+                               eof-act-stx
+                               wrap?))
+                  'disappeared-use
+                  disappeared-uses)))))))))
 
   (define-syntax lexer (make-lexer-trans #f))
   (define-syntax lexer-src-pos (make-lexer-trans #t))
@@ -123,7 +126,7 @@
     (syntax-case stx ()
       ((_ name re)
        (identifier? (syntax name))
-       (syntax
+       (syntax/loc stx
         (define-syntax name
           (make-lex-abbrev (quote-syntax re)))))
       (_ 
@@ -141,7 +144,7 @@
                          (syntax-case a ()
                            ((name re)
                             (identifier? (syntax name))
-                            (syntax (define-lex-abbrev name re)))
+                            (syntax/loc a (define-lex-abbrev name re)))
                            (_ (raise-syntax-error
                                #f
                                "form should be (define-lex-abbrevs (name re) ...)"
