@@ -135,6 +135,7 @@
   ;; resolve-conflict : (listof action?) -> action? bool bool
   (define (resolve-conflict actions)
     (cond
+      ((null? actions) (values (make-no-action) #f #f))
       ((null? (cdr actions))
        (values (car actions) #f #f))
       (else
@@ -195,16 +196,16 @@
            (reduce-prec (prod-prec (reduce-prod reduce))))
       (cond
         ((and shift-prec reduce-prec)
-         (list
-          (cond
-            ((< (prec-num shift-prec) (prec-num reduce-prec))
-             reduce)
-            ((> (prec-num shift-prec) (prec-num reduce-prec))
-             shift)
-            ((eq? 'left (prec-assoc shift-prec))
-             reduce)
-            ((eq? 'right (prec-assoc shift-prec))
-             shift))))
+         (cond
+           ((< (prec-num shift-prec) (prec-num reduce-prec))
+            (list reduce))
+           ((> (prec-num shift-prec) (prec-num reduce-prec))
+            (list shift))
+           ((eq? 'left (prec-assoc shift-prec))
+            (list reduce))
+           ((eq? 'right (prec-assoc shift-prec))
+            (list shift))
+           (else null)))
         (else actions))))
     
   
@@ -280,7 +281,6 @@
             (call-with-output-file file
               (lambda (port)
                 (display-parser a grouped-table (send g get-prods) port)))))
-        
         (resolve-conflicts grouped-table suppress))))
   
   )
