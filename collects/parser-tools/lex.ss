@@ -10,7 +10,7 @@
   (provide lex define-lex-abbrev define-lex-abbrevs
 	   make-lex-buf
 	   get-position position-offset position-line position-col position?
-           define-tokens define-empty-tokens token-value token-name token?)
+           define-tokens define-empty-tokens)
 
 
   (define-syntax lex
@@ -27,9 +27,9 @@
 			   (lambda ()
 			     end-pos)
 			   (lambda ()
-			     (list->string (reverse (filter (lambda (x) 
-							      (char? x))
-							    match))))
+			     (if (char? (car match))
+				 (list->string (reverse match))
+				 (list->string (reverse (cdr match)))))				 
 			   lb)))))
 	      (lambda (lb)
 		(unless (lex-buffer? lb)
@@ -37,21 +37,22 @@
 			       (format 
 				"Lexer expects argument of type lex-buf; given ~a" lb)))
 		(let ((first-pos (get-position lb)))
-		  (let loop (
-			     ;; current-state
-			     (state start-state)
-			     ;; the character to transition on
-			     (char (next-char lb))
-			     ;; action for the longest match seen thus far
-			     ;; including a match at the current state
-			     (longest-match-action 
-			      (vector-ref actions start-state))
-			     ;; how many characters have been read
-			     ;; including the one just read
-			     (length 1)
-			     ;; how many characters are in the longest match
-			     (longest-match-length 0)
-			     (end-pos first-pos))
+		  (let lexer-loop (
+				   ;; current-state
+				   (state start-state)
+				   ;; the character to transition on
+				   (char (next-char lb))
+				   ;; action for the longest match seen thus far
+				   ;; including a match at the current state
+				   (longest-match-action 
+				    (vector-ref actions start-state))
+				   ;; how many characters have been read
+				   ;; including the one just read
+				   (length 1)
+				   ;; how many characters are in the longest match
+				   (longest-match-length 0)
+				   ;;(end-pos first-pos))
+				   (end-pos first-pos))
 		    (let ((next-state
 			   (cond
 			    ((eof-object? char)
@@ -70,16 +71,17 @@
 						longest-match-action
 						length))
 		       (else
-			(loop next-state 
-			      (next-char lb)
-			      (if (vector-ref actions next-state)
-				  (vector-ref actions next-state)
-				  longest-match-action)
-			      (add1 length)
-			      (if (vector-ref actions next-state)
-				  length
-				  longest-match-length)
-			      pos))))))))))
+			(let ((act (vector-ref actions next-state)))
+			  (lexer-loop next-state 
+				      (next-char lb)
+				      (if act
+					  act
+					  longest-match-action)
+				      (add1 length)
+				      (if act
+					  length
+					  longest-match-length)
+				      pos)))))))))))
       (lambda (stx)
 	(syntax-case stx ()
 		     ((_ (re act) ...) 
@@ -222,10 +224,5 @@
 
 
 )
-
-
-
-
-
 
 

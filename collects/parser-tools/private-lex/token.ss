@@ -7,7 +7,7 @@
 
   (provide define-tokens define-empty-tokens token-name token-value token?)
 
-  (define-struct token (name value))
+  (define-struct token (name value) (make-inspector))
 
   (define-syntax define-tokens
     (lambda (stx)
