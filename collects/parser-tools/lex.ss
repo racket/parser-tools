@@ -185,6 +185,7 @@
        ((not (input-port? ip))
 	(raise-type-error 'make-lex-buf "input-port" 0 ip))
        (else
+        (port-count-lines! ip)
 	(make-lex-buffer ip 0 0 0 0))))
      ((ip offsets)
       (cond
@@ -196,6 +197,7 @@
 	    (not (andmap (lambda (x) (>= x 0)) offsets)))
 	(raise-type-error 'make-lex-buf "list of 3 non-negative exact integers" 1 ip offsets))
        (else
+        (port-count-lines! ip)
 	(make-lex-buffer ip 0 (car offsets) (cadr offsets) (caddr offsets)))))))
 
   (define (next-char lb)
