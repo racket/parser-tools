@@ -63,6 +63,60 @@
 
   ;; c = char | eof
   ;; lex-buf = 
+  ;;   (make-lex-buffer input-port int int int int)
+  (define-struct lex-buffer (ip peek-amt line-start col-start offset-start))
+
+  ;; make-lex-buf: input-port -> lex-buf
+  (define make-lex-buf
+    (case-lambda 
+     ((ip) 
+      (cond
+       ((not (input-port? ip))
+	(raise-type-error 'make-lex-buf "input-port" 0 ip))
+       (else
+	(make-lex-buffer ip 0 0 0 0))))
+     ((ip offsets)
+      (cond
+       ((not (input-port? ip))
+	(raise-type-error 'make-lex-buf "input-port" 0 ip offsets))
+       ((or (not (= 3 (length offsets)))
+	    (not (andmap integer? offsets))
+	    (not (andmap exact? offsets))
+	    (not (andmap (lambda (x) (>= x 0)) offsets)))
+	(raise-type-error 'make-lex-buf "list of 3 non-negative exact integers" 1 ip offsets))
+       (else
+	(make-lex-buffer ip 0 (car offsets) (cadr offsets) (caddr offsets)))))))
+
+  (define (next-char lb)
+    (let ((str (peek-string 1 (lex-buffer-peek-amt lb) (lex-buffer-ip lb))))
+      (cond
+       ((string? str)
+	(set-lex-buffer-peek-amt! lb (add1 (lex-buffer-peek-amt lb)))
+	(string-ref str 0))
+       (else eof))))
+
+  ;; get-match: lex-buf * int -> string
+  ;; reads the next i characters.
+  (define (get-match lb i)
+    (set-lex-buffer-peek-amt! lb 0)
+    (read-string i (lex-buffer-ip lb)))
+
+  (define-struct position (offset line col))
+  (define (get-position lb)
+    (let-values (((line col off) (port-next-location (lex-buffer-ip lb))))
+      (if (and line col)
+	  (make-position (+ (lex-buffer-offset-start lb) off)
+			 (+ (lex-buffer-line-start lb) line)
+			 (if (= line 1)
+			     (+ (lex-buffer-col-start lb) col)
+			     col))
+	  (make-position (+ (lex-buffer-offset-start lb) off) #f #f))))
+  #|
+  ;; Lex buffer is NOT thread safe
+
+
+  ;; c = char | eof
+  ;; lex-buf = 
   ;;   (make-lex-buffer input-port (c list) (c list) int int int (int list))
   (define-struct lex-buffer (ip from to offset line col line-lengths tab-skips))
 
@@ -176,6 +230,8 @@
 		   (lex-buffer-col lb)))
 
 
+|#
 )
+
 
 
