@@ -463,7 +463,10 @@ void wxText::DoPeriodicAction(void) // mac platform only
 void wxText::OnChar(wxKeyEvent& event) // mac platform only
 {
 	long st,se;
+	int no_change = 0;
   
+   	SetCurrentDC();
+   			  
 	HLock((Handle)cMacTE);
 	st = (*cMacTE)->selStart;
 	se = (*cMacTE)->selEnd;	
@@ -494,33 +497,12 @@ void wxText::OnChar(wxKeyEvent& event) // mac platform only
 				  return;
 				}
 				break;
-#if 0 // tom replaces:
-			case WXK_UP:
-				code = 30;
-				break;					
-			case WXK_DOWN:
-				code = 31;
-				break;					
-			case WXK_LEFT:
-				code = 28;
-				break;					
-			case WXK_RIGHT:
-				code = 29;
-				break;					
-			default:
-				break;
-		}
-
-		SetCurrentDC();
-		::TEKey(code, cMacTE);
-		macAdjustScrollBars();
-		cTextModified = TRUE;
-	}
-#else
  			case WXK_UP:			
   			case WXK_DOWN:
+  			    no_change = 1;
  				break;	
   			case WXK_LEFT:
+  			    no_change = 1;
  	 	 	 if (st>0) {
  		  	    st--;
  		  	    TESetSelect(st,st,cMacTE);
@@ -532,6 +514,7 @@ void wxText::OnChar(wxKeyEvent& event) // mac platform only
  			  }
  	 	 	break;
  	 	 	case WXK_RIGHT:
+  			    no_change = 1;
  	 	 	if (se<(*cMacTE)->teLength) {
  		  	    se++;
  		  	    TESetSelect(se,se,cMacTE);
@@ -539,10 +522,12 @@ void wxText::OnChar(wxKeyEvent& event) // mac platform only
  		  	  }
  	 	 	break;
  	 	 	case WXK_HOME:
+  			    no_change = 1;
  	 	 	  st = 0;
  	 	 	  TESetSelect(st,st,cMacTE);
  	 	 	break;
  	 	 	case WXK_END:
+  			    no_change = 1;
  	 	 	  se = (*cMacTE)->teLength;
  	 	 	  TESetSelect(se,se,cMacTE);
  	 	 	break;
@@ -556,11 +541,12 @@ void wxText::OnChar(wxKeyEvent& event) // mac platform only
  	 	    TEDelete(cMacTE);
  	 	 	break;
  	 	 	case WXK_PAGEUP:
+ 	 	 	    no_change = 1;
  	 	 	break;
  	 	 	case WXK_PAGEDOWN:
+  			    no_change = 1;
  	 	 	break;		
   			default:
- 			  SetCurrentDC(); // tom: I am not sure about this call...
  			  char theChar = event.keyCode;
  			  ::TEKey(theChar, cMacTE);
  			  //macAdjustScrollBars();
@@ -573,7 +559,14 @@ void wxText::OnChar(wxKeyEvent& event) // mac platform only
      TEScroll(-10,0,cMacTE);
    }
    HUnlock((Handle)cMacTE);
-#endif
+   
+   if (!no_change) {
+	wxCommandEvent *commandEvent = new wxCommandEvent(wxEVENT_TYPE_TEXT_COMMAND);
+	commandEvent->commandString = GetValue();
+	commandEvent->eventObject = this;
+	ProcessCommand(*commandEvent);
+
+   }
 }
 
 //-----------------------------------------------------------------------------
@@ -705,16 +698,7 @@ char* wxText::GetLabel(void)
 //-----------------------------------------------------------------------------
 char* wxText::GetValue(void)
 {
-	CharsHandle theMacText = ::TEGetText(cMacTE);
-	int theMacTextLength = (**cMacTE).teLength;
-#if 1 // CJC
-	char *result = wxBuffer;
-#else
-	char* result = new char[theMacTextLength + 1];
-#endif
-	BlockMove(*theMacText, result, theMacTextLength);
-	result[theMacTextLength] = 0; // terminate "C" string
-	return result;
+	return GetContents();
 }
 
 //-----------------------------------------------------------------------------
