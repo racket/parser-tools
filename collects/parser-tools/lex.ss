@@ -86,7 +86,7 @@
 				      pos)))))))))))
       (lambda (stx)
 	(syntax-case stx ()
-          ((_ (re1 act1) (re act) ...) 
+          ((_ (re1 act1) (re act) ...)
            (let* ((table (generate-table (syntax ((re1 act1) (re act) ...)) stx))
                   (code
                    `(let ((start-state ,(table-start table))
@@ -152,7 +152,7 @@
        ((not (input-port? ip))
 	(raise-type-error 'make-lex-buf "input-port" 0 ip))
        (else
-	(make-lex-buffer ip null null 0 0 0 null))))
+	(make-lex-buffer ip null null 1 1 1 null))))
      ((ip offsets)
       (cond
        ((not (input-port? ip))
@@ -163,7 +163,7 @@
 	    (not (andmap (lambda (x) (>= x 0)) offsets)))
 	(raise-type-error 'make-lex-buf "list of 3 non-negative exact integers" 1 ip offsets))
        (else
-	(make-lex-buffer ip null null (caddr offsets) (car offsets) (cadr offsets) null))))))
+	(make-lex-buffer ip null null (add1 (caddr offsets)) (add1 (car offsets)) (add1 (cadr offsets)) null))))))
 
   ;; next-char: lex-buf -> c
   ;; gets the next character from the buffer
@@ -179,9 +179,9 @@
 		(set-lex-buffer-from! lb (cdr (lex-buffer-from lb)))))))))
       (let ((char-in
 	     (let ((real-char (get-next)))
-	       (if (char=? #\return real-char)
+	       (if (eq? #\return real-char)
 		   (let ((second-char (get-next)))
-		     (if (not (char=? second-char #\newline))
+		     (if (not (eq? second-char #\newline))
 			 (set-lex-buffer-from! 
 			  lb 
 			  (cons second-char (lex-buffer-from lb))))
@@ -189,17 +189,17 @@
 		   real-char))))
 	(set-lex-buffer-to! lb (cons char-in (lex-buffer-to lb)))
 	(cond 
-	 ((char=? #\tab char-in)
-	  (let ((skip-amt (- 8 (modulo (lex-buffer-col lb) 8))))
+	 ((eq? #\tab char-in)
+	  (let ((skip-amt 1));(- 8 (modulo (lex-buffer-col lb) 8))))
 	    (set-lex-buffer-col! lb (+ skip-amt (lex-buffer-col lb)))
 	    (set-lex-buffer-offset! lb (+ skip-amt (lex-buffer-col lb)))))
-	 ((char=? #\newline char-in)
+	 ((eq? #\newline char-in)
 	  (set-lex-buffer-line-lengths!
 	   lb
 	   (cons (lex-buffer-col lb)
 		 (lex-buffer-line-lengths lb)))
 	  (set-lex-buffer-line! lb (add1 (lex-buffer-line lb)))
-	  (set-lex-buffer-col! lb 0)
+	  (set-lex-buffer-col! lb 1)
 	  (set-lex-buffer-offset! lb (add1 (lex-buffer-offset lb))))
 	 (else
 	  (set-lex-buffer-col! lb (add1 (lex-buffer-col lb)))
@@ -224,7 +224,7 @@
 		 ((= 0 num-to-add) (values from to))
 		 (else
 		  (cond
-		   ((char=? #\newline (car from))
+		   ((eq? #\newline (car from))
 		    (set-lex-buffer-line! 
 		     lb
 		     (sub1 (lex-buffer-line lb)))
