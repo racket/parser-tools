@@ -167,9 +167,9 @@
                     ((eq? 'special first-char)
                      (let* ((comment? #f)
                             (error? #f)
-                            (spec (with-handlers ((exn:special-comment?
+                            (spec (with-handlers ((special-comment?
                                                    (lambda (x) (set! comment? #t)))
-                                                  (not-break-exn?
+                                                  (exn:fail?
                                                    (lambda (ex) (set! error? #t) ex)))
                                     (read-char-or-special ip))))
                        (cond
