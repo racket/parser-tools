@@ -31,9 +31,9 @@
   ;;   be used to compare kernels
   ;; LR0-automaton = (make-lr0 (trans-key kernel hash-table) (kernel vector))
   ;; trans-key = (make-trans-key kernel gram-sym)
-  (define-struct kernel (items index))
-  (define-struct trans-key (st gs))
-  (define-struct lr0 (transitions states))
+  (define-struct kernel (items index) (make-inspector))
+  (define-struct trans-key (st gs) (make-inspector))
+  (define-struct lr0 (transitions states) (make-inspector))
   
   ;; The kernels in the automaton are represented cannonically.
   ;; That is (equal? a b) <=> (eq? a b)
@@ -226,7 +226,7 @@
 	  (enq! new-kernels (goto (car old-kernels)))
 	  (loop (cdr old-kernels) (cons (car old-kernels) seen-kernels)))))))
 
-  (define-struct q (f l))
+  (define-struct q (f l) (make-inspector))
   (define (empty-queue? q)
     (null? (q-f q)))
   (define (make-queue)

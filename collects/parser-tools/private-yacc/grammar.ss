@@ -41,7 +41,7 @@
   ;; LR-item = (make-item production nat (int | #f))
   ;; The n field contains the least integer such the item is nullable
   ;; after the dot if the dot is to the right of the nth position.
-  (define-struct item (prod dot-pos n))
+  (define-struct item (prod dot-pos n) (make-inspector))
 
   (define (export-make-item a b)
     (make-item a b #f))
@@ -120,8 +120,8 @@
 
   ;; gram-sym = (make-term symbol int prec)
   ;;          | (make-non-term symbol int)
-  (define-struct term (sym index prec))
-  (define-struct non-term (sym index))
+  (define-struct term (sym index prec) (make-inspector))
+  (define-struct non-term (sym index) (make-inspector))
 
   (define (non-term<? nt1 nt2)
     (< (non-term-index nt1) (non-term-index nt2)))
@@ -147,7 +147,7 @@
   ;; a precedence declaration.  the sym should be 'left 'right or 'nonassoc
   ;; prec = (make-prec int sym)
   ;;      | #f
-  (define-struct prec (num assoc))
+  (define-struct prec (num assoc) (make-inspector))
 
   ;; ------------------------- Grammar ------------------------------
   
@@ -165,7 +165,8 @@
   ;; The nulls field is indexed by the index for a non-term and is trus iff 
   ;;   the non-term is nullable
   (define-struct gram 
-    (nt-prods prods nulls non-terms terms num-prods end-terms))
+    (nt-prods prods nulls non-terms terms num-prods end-terms) 
+    (make-inspector))
 
 
   ;; get-nt-prods: grammar * non-term -> production list
@@ -188,5 +189,5 @@
   ;; ------------------------ Productions ---------------------------
   
   ;; production = (make-prod non-term (gram-sym vector) int prec syntax-object)
-  (define-struct prod (lhs rhs index prec action))
+  (define-struct prod (lhs rhs index prec action) (make-inspector))
 )

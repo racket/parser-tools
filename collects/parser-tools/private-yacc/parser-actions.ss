@@ -13,7 +13,7 @@
   ;;        | int
   ;;        | #f
 
-  (define-struct shift (state))
-  (define-struct reduce (prod-num lhs-num rhs-length))
-  (define-struct accept ())
+  (define-struct shift (state) (make-inspector))
+  (define-struct reduce (prod-num lhs-num rhs-length) (make-inspector))
+  (define-struct accept () (make-inspector))
   )
