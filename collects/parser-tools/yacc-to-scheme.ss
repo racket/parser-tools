@@ -22,9 +22,9 @@
   (define-lex-abbrevs
    (letter (: (- "a" "z") (- "A" "Z")))
    (digit (- "0" "9"))
-   (initial (: (letter) ! $ % & * / < = > ? ^ _ ~ @))
-   (subsequent (: (initial) (digit) + - #\. @))
-   (comment (@ /* (* (: (^ *) (@ * (^ /)))) */)))
+   (initial (: letter "!" "$" "%" "&" "*" "/" "<" "=" ">" "?" "^" "_" "~" "@"))
+   (subsequent (: initial digit "+" "-" "." "@"))
+   (comment (@ "/*" (* (: (^ "*") (@ "*" (^ "/")))) "*/")))
 
   (define-empty-tokens x
     (EOF PIPE |:| SEMI |%%| %prec))
@@ -35,13 +35,13 @@
     (lexer-src-pos
      ("%%" '|%%|)
      ((: ":") (string->symbol lexeme))
-     (%prec (string->symbol lexeme))
+     ("%prec" (string->symbol lexeme))
      (#\| 'PIPE)
-     ((+ (: #\newline #\tab " " (comment) (@ "{" (* (^ "}")) "}"))) (return-without-pos (get-token-grammar input-port)))
+     ((+ (: #\newline #\tab " " comment (@ "{" (* (^ "}")) "}"))) (return-without-pos (get-token-grammar input-port)))
      (#\; 'SEMI)
      (#\' (token-STRING (string->symbol (list->string (match-single-string input-port)))))
      (#\" (token-STRING (string->symbol (list->string (match-double-string input-port)))))
-     ((@ (initial) (* (subsequent))) (token-SYM (string->symbol lexeme)))))
+     ((@ initial (* subsequent)) (token-SYM (string->symbol lexeme)))))
 
   (define (parse-grammar enter-term enter-empty-term enter-non-term)
     (parser
