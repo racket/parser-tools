@@ -124,8 +124,7 @@
 		  (else
 		   (vector-ref 
 		    trans-table
-		    (bitwise-ior (char->integer char)
-				 (arithmetic-shift state 8)))))))
+                    (+ (char->integer (string-ref char 0)) (* 256 state)))))))
             (cond
               ((not next-state)
                (do-match lb first-pos longest-match-length longest-match-action wrap?))
@@ -147,7 +146,7 @@
                              (if act
                                  length
                                  longest-match-length))))))))))
-
+  
   (define (do-match lb first-pos longest-match-length longest-match-action wrap?)
     (let* ((match (get-match lb longest-match-length))
            (end-pos (get-position lb)))
@@ -159,16 +158,24 @@
            (position-col first-pos)
            (position-offset first-pos)
            (- (position-offset end-pos) (position-offset first-pos))))
-      (let/ec ret
-        (let ((act (longest-match-action
-                    (lambda () first-pos)
-                    (lambda () end-pos)
-                    (lambda () match)
-                    ret
-                    lb)))
-          (if wrap?
-              (list act first-pos end-pos)
-              act)))))
+      (cond
+        (wrap?
+         (let/ec ret
+           (list (longest-match-action
+                  (lambda () first-pos)
+                  (lambda () end-pos)
+                  (lambda () match)
+                  ret
+                  lb) 
+                 first-pos 
+                 end-pos)))
+        (else 
+         (longest-match-action
+          (lambda () first-pos)
+          (lambda () end-pos)
+          (lambda () match)
+          (lambda (x) x)
+          lb)))))
   
   
   ;; Lex buffer is NOT thread safe
@@ -200,13 +207,12 @@
         (port-count-lines! ip)
 	(make-lex-buffer ip 0 (car offsets) (cadr offsets) (caddr offsets)))))))
 
+  ;; next-char: lex-buffer -> (string or eof)
   (define (next-char lb)
-    (let ((str (peek-string 1 (lex-buffer-peek-amt lb) (lex-buffer-ip lb))))
-      (cond
-       ((string? str)
-	(set-lex-buffer-peek-amt! lb (add1 (lex-buffer-peek-amt lb)))
-	(string-ref str 0))
-       (else eof))))
+    (let* ((peek-amt (lex-buffer-peek-amt lb))
+	   (str (peek-string 1 peek-amt (lex-buffer-ip lb))))
+      (set-lex-buffer-peek-amt! lb (add1 peek-amt))
+      str))
 
   ;; get-match: lex-buf * int -> string
   ;; reads the next i characters.
