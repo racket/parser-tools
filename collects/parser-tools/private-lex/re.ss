@@ -25,9 +25,9 @@
   ;;
   ;; Every re must have an index field globally different from all
   ;; other re index fields.
-  (define-struct re (nullable? index))
-  (define-struct (epsilonR re) ())
-  (define-struct (zeroR re) ())
+  (define-struct re (nullable? index) (make-inspector))
+  (define-struct (epsilonR re) () (make-inspector))
+  (define-struct (zeroR re) () (make-inspector))
   (define-struct (char-setR re) (chars) (make-inspector))
   (define-struct (concatR re) (re1 re2) (make-inspector))
   (define-struct (repeatR re) (re))

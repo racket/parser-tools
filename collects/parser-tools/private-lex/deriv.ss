@@ -180,17 +180,25 @@
       ((null? res) #f)
       ((re-nullable? (caar res)) (cdar res))
       (else (get-final (cdr res)))))
-
+  (print-struct #t)
   (test-block ((c (make-cache))
                (r1 (->re #\a c))
                (r2 (->re #\b c))
+               (b (list (cons z 1) (cons z 2) (cons z 3) (cons e 4) (cons z 5)))
                (a (list (cons r1 1) (cons r2 2))))
               ((derive null #\a c) #f)
               ((derive a #\a c) (list (cons e 1) (cons z 2)))
               ((derive a #\b c) (list (cons z 1) (cons e 2)))
               ((derive a #\c c) #f)
+              ((derive (list (cons (->re `(: " " "\n" ",") c) 1)
+                             (cons (->re `(@ (? "-") (+ (- "0" "9"))) c) 2)
+                             (cons (->re `(@ "-" (+ "-")) c) 3)
+                             (cons (->re "[" c) 4)
+                             (cons (->re "]" c) 5)) #\[ c)
+               b)
               ((get-final a) #f)
-              ((get-final (list (cons e 1) (cons e 2))) 1))
+              ((get-final (list (cons e 1) (cons e 2))) 1)
+              ((get-final b) 4))
   
   
   ;; A state is (make-state (list-of re-action) nat)
@@ -310,5 +318,10 @@
   (define t7 (build-test-dfa `((@ (* #\a) (* #\b) (* #\c) (* #\d) (* #\e)))))
   (define t8
     (build-test-dfa `((@ (* (: #\a #\b)) #\a (: #\a #\b) (: #\a #\b) (: #\a #\b) (: #\a #\b)))))
+  (define x (build-test-dfa `((: " " "\n" ",")
+                              (@ (? "-") (+ (- "0" "9")))
+                              (@ "-" (+ "-"))
+                              "["
+                              "]")))
 |#
   )
