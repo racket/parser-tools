@@ -1,9 +1,10 @@
-;; This is based on the calculator example in the bison manual.
+;; An interactive calculator inspired by the calculator example in the bison manual.
 
 
 ;; Import the parser and lexer generators.
 (require (lib "yacc.ss" "parser-tools")
-         (lib "lex.ss" "parser-tools"))
+         (lib "lex.ss" "parser-tools")
+         (lib "readerr.ss" "syntax"))
 
 (define-tokens value-tokens (NUM VAR FNCT))
 (define-empty-tokens op-tokens (newline = OP CP + - * / ^ EOF NEG))
@@ -49,11 +50,11 @@
 (define calcp
   (parser
    
-   (start exp)
-   (end EOF newline)
+   (start start)
+   (end newline EOF)
    (tokens value-tokens op-tokens)
-   (error void)
-   
+   (error (lambda (a b c) (void)))
+
    (precs (right =)
           (left - +)
           (left * /)
@@ -61,6 +62,12 @@
           (right ^))
    
    (grammar
+    
+    (start [() #f]
+           ;; If there is an error, ignore everything before the error
+           ;; and try to start over right after the error
+           [(error exp) $2]
+           [(exp) $1])
     
     (exp [(NUM) $1]
          [(VAR) (hash-table-get vars $1 (lambda () 0))]
@@ -79,4 +86,11 @@
 (define (calc ip)
   ;; Make the lex-buffer
   (let ((lb (make-lex-buf ip)))
-    (calcp (lambda () (calcl lb)))))
+    (letrec ((one-line
+              (lambda ()
+                (let ((result (calcp (lambda () (calcl lb)))))
+                  (if result
+                      (begin
+                        (printf "~a~n" result)
+                        (one-line)))))))
+      (one-line))))
