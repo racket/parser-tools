@@ -14,7 +14,7 @@
   (define-syntax lex
     (let ((code
 	   `(letrec ((match
-		      (lambda (lb first-pos longest-match-length longest-match-action length)
+		      (lambda (lb first-pos end-pos longest-match-length longest-match-action length)
 			(let ((match 
 			       (push-back lb (- length longest-match-length))))
 			  (if (not longest-match-action)
@@ -23,7 +23,7 @@
 			   (lambda ()
 			     first-pos)
 			   (lambda ()
-			     (get-position lb))
+			     end-pos)
 			   (lambda ()
 			     (list->string (reverse (filter (lambda (x) 
 							      (char? x))
@@ -48,7 +48,8 @@
 			     ;; including the one just read
 			     (length 1)
 			     ;; how many characters are in the longest match
-			     (longest-match-length 0))
+			     (longest-match-length 0)
+			     (end-pos first-pos))
 		    (let ((next-state
 			   (cond
 			    ((eof-object? char)
@@ -57,10 +58,12 @@
 			     (vector-ref 
 			      trans-table
 			      (bitwise-ior (char->integer char)
-					   (arithmetic-shift state 8)))))))
+					   (arithmetic-shift state 8))))))
+			  (pos (get-position lb)))
 		      (cond
 		       ((not next-state) (match lb
 						first-pos
+						end-pos
 						longest-match-length
 						longest-match-action
 						length))
@@ -73,7 +76,8 @@
 			      (add1 length)
 			      (if (vector-ref actions next-state)
 				  length
-				  longest-match-length)))))))))))
+				  longest-match-length)
+			      pos))))))))))
       (lambda (stx)
 	(syntax-case stx ()
 		     ((_ (re act) ...) 
@@ -111,7 +115,7 @@
 
   ;; make-lex-buf: input-port -> lex-buf
   (define (make-lex-buf ip)
-    (make-lex-buffer ip null null 0 0 0 null))
+    (make-lex-buffer ip null null 1 1 1 null))
 
   ;; next-char: lex-buf -> c
   ;; gets the next character from the buffer
@@ -131,7 +135,7 @@
 	 (cons (lex-buffer-col lb)
 	       (lex-buffer-line-lengths lb)))
 	(set-lex-buffer-line! lb (add1 (lex-buffer-line lb)))
-	(set-lex-buffer-col! lb 0))
+	(set-lex-buffer-col! lb 1))
        (else
 	(set-lex-buffer-col! lb (add1 (lex-buffer-col lb)))))
       (set-lex-buffer-offset! lb (add1 (lex-buffer-offset lb)))
