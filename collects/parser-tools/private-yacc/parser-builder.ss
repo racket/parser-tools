@@ -62,12 +62,12 @@
                      (if assocs
                          (map get-term-binder
                               (syntax-case assocs ()
-                                ((_ (__ term ...) ...)
+                                (((__ term ...) ...)
                                  (syntax->list (syntax (term ... ...))))))
                          null)))
         #`(when #f
             (let ((bind void) ...)
-              (void ))))));bound ... ... term-group ... start ... end ... prec ...))))))
+              (void bound ... ... term-group ... start ... end ... prec ...))))))
   
   (define (build-parser filename src-pos suppress input-terms start end assocs prods)
     (let* ((grammar (parse-input input-terms start end assocs prods src-pos))

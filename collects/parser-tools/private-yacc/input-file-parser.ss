@@ -152,8 +152,7 @@
             (syntax-case prec-decls ()
               (((type term ...) ...)
                (let ((p-terms 
-                      (apply append (syntax-object->datum 
-                                     (syntax ((term ...) ...))))))
+                      (syntax-object->datum (syntax (term ... ...)))))
                  (cond
                    ((duplicate-list? p-terms) =>
                     (lambda (d)
@@ -186,7 +185,7 @@
                             "Associativity must be left, right or nonassoc"
                             type)))
                      (syntax->list (syntax (type ...))))
-                    (cdr (syntax-object->datum prec-decls))))))
+                    (syntax-object->datum prec-decls)))))
               (#f null)
               (_
                (raise-syntax-error
