@@ -5,6 +5,7 @@
                       "private-yacc/yacc-helper.ss")
   (require "private-yacc/array2d.ss"
            "private-lex/token.ss"
+           "private-yacc/parser-actions.ss"
 	   (lib "readerr.ss" "syntax"))
   
   (provide parser)
@@ -153,14 +154,6 @@
 
   (define (false-thunk) #f) 
 
-  (define shift? integer?)
-  (define (shift-state x) (- x))
-  (define reduce? vector?)
-  (define (reduce-prod-num x) (vector-ref x 0))
-  (define (reduce-lhs-num x) (vector-ref x 1))
-  (define (reduce-rhs-length x) (vector-ref x 2))
-  (define (accept? x) (eq? x 'accept))
-  
   ;; The table format is an array2d that maps each state/term pair to either
   ;; an accept, shift or reduce structure - or a #f.  Except that we will encode
   ;; by changing (make-accept) -> 'accept, (make-shift i) -> i and

@@ -171,8 +171,8 @@
     (letrec (
 	     (terms (list->vector (send grammar get-terms)))
 	     (non-terms (list->vector (send grammar get-non-terms)))
-	     (num-non-terms (vector-length non-terms))
-	     (num-gram-syms (+ num-non-terms (vector-length terms)))
+	     (num-non-terms (send grammar get-num-non-terms))
+	     (num-gram-syms (+ num-non-terms (send grammar get-num-terms)))
 	     (epsilons (make-hash-table 'equal))
 	     
 	     ;; first-non-term: non-term -> non-term list
@@ -191,7 +191,7 @@
 		       (lambda (nt) (list nt))
 		       (union non-term<?)
 		       (lambda () null)))
-
+             
 	     ;; closure: LR1-item list -> LR1-item list
 	     ;; Creates a set of items containing i s.t. if A -> n.Xm is in it,
 	     ;; X -> .o is in it too.
@@ -216,7 +216,6 @@
 			     (LR0-closure (cdr i)))))
 		     (else
 		      (cons (car i) (LR0-closure (cdr i))))))))))
-
 
 
 	     ;; maps trans-keys to kernels
@@ -274,7 +273,6 @@
 		  (for-each (lambda (item)
 			      (add-item! table item))
 			    (LR0-closure (kernel-items kernel)))
-
 		  
 		  ;; each group is a new kernel, with the dot advanced.
 		  ;; sorts the items in a kernel so kernels can be compared
@@ -333,8 +331,7 @@
 				  (loop (add1 i)))))))
 		       (else null))))))))
 			
-	      
-	     (start (list (make-item (send grammar get-init-prod) 0)))
+             (start (list (make-item (send grammar get-init-prod) 0)))
 	     (startk (make-kernel start 0))
 	     (new-kernels (make-queue)))
       

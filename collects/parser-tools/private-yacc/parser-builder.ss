@@ -2,7 +2,6 @@
 (module parser-builder mzscheme
   
   (require "input-file-parser.ss"
-           "parser-actions.ss"
            "grammar.ss"
            "table.ss"
            (lib "class.ss"))
@@ -55,17 +54,6 @@
                  ht)))
            (actions-code
             `(vector ,@(map prod-action (send grammar get-prods)))))
-      (let loop ((i 1))
-        (if (< i (vector-length table))
-            (let ((a (vector-ref table i)))
-              (vector-set! table i (cond
-                                     ((accept? a) 'accept)
-                                     ((shift? a) (- (shift-state a)))
-                                     ((reduce? a) (vector (reduce-prod-num a)
-                                                          (reduce-lhs-num a)
-                                                          (reduce-rhs-length a)))
-                                     (else a)))
-              (loop (add1 i)))))
     (values table
             token-code
             actions-code

@@ -216,13 +216,11 @@
   ;; buile-table: grammar * string -> action array2d
   (define (build-table g file suppress)
     (let* ((a (build-lr0-automaton g))
-           (terms (send g get-terms))
-           (non-terms (send g get-non-terms))
-           (get-term (list->vector terms))
-           (get-non-term (list->vector non-terms))
+           (num-terms (send g get-num-terms))
+           (num-non-terms (send g get-num-non-terms))
+           (get-term (list->vector (send g get-terms)))
+           (get-non-term (list->vector (send g get-non-terms)))
            (get-prod (list->vector (send g get-prods)))
-           (num-terms (vector-length get-term))
-           (num-non-terms (vector-length get-non-term))
            (end-term-indexes 
             (map
              (lambda (term)
@@ -240,7 +238,7 @@
                   (else (if (not (equal? a old))
                             (array2d-set! v i1 i2 (list a old))))))))
            (get-lookahead (compute-LA a g)))
-     
+      
       (send a for-each-state
             (lambda (state)
               (let loop ((i 0))
@@ -264,7 +262,6 @@
                                              (make-shift 
                                               (kernel-index goto)))))))
                       (loop (add1 i)))))
-            
               (for-each
                (lambda (item)
                  (let ((item-prod (item-prod item)))
@@ -285,26 +282,27 @@
                        (filter (lambda (item)
                                  (not (move-dot-right item)))
                                (kernel-items state))))))
- 
+      
+      
       (resolve-prec-conflicts a table get-term get-prod num-terms
-                            num-non-terms)
-    
-    (if (not (string=? file ""))
-        (with-handlers [(exn:i/o:filesystem?
-                         (lambda (e)
-                           (fprintf 
-                            (current-error-port)
-                            "Cannot write debug output to file \"~a\".  ~a~n"
-                            (exn:i/o:filesystem-pathname e)
-                            (exn:i/o:filesystem-detail e))))]
-          (call-with-output-file file
-            (lambda (port)
-              (display-parser a table get-term get-non-term (send g get-prods)
-                              port)))))
-    (resolve-conflicts a table num-terms num-non-terms suppress)
-    table))
+                              num-non-terms)
+      (if (not (string=? file ""))
+          (with-handlers [(exn:i/o:filesystem?
+                           (lambda (e)
+                             (fprintf 
+                              (current-error-port)
+                              "Cannot write debug output to file \"~a\".  ~a~n"
+                              (exn:i/o:filesystem-pathname e)
+                              (exn:i/o:filesystem-detail e))))]
+            (call-with-output-file file
+              (lambda (port)
+                (display-parser a table get-term get-non-term (send g get-prods)
+                                port)))))
+      
+      (resolve-conflicts a table num-terms num-non-terms suppress)
+      
+      table))
+  
+  )
 
-    )
-     
-     
-     
+
