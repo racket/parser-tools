@@ -9,7 +9,7 @@
 	   (lib "readerr.ss" "syntax"))
   
   (provide parser)
-  
+   
   (define-syntax (parser stx)
     (syntax-case stx ()
       ((_ args ...)
@@ -107,22 +107,196 @@
              (raise-syntax-error #f "missing end declaration" stx))
          (if (not start)
              (raise-syntax-error #f "missing start declaration" stx))
-         (build-parser (if debug debug "")
-                       src-pos
-                       suppress
-                       error
-                       tokens
-                       start
-                       end
-                       precs
-                       grammar
-                       #'here
-                       stx)))
+         (let-values (((table term-sym->index actions check-syntax-fix)
+                       (build-parser (if debug debug "")
+                                     src-pos
+                                     suppress
+                                     tokens
+                                     start
+                                     end
+                                     precs
+                                     grammar
+                                     stx)))
+           (with-syntax ((check-syntax-fix check-syntax-fix)
+                         (err error)
+                         (ends end)
+                         (table table)
+                         (term-sym->index term-sym->index)
+                         (actions actions)
+                         (src-pos src-pos))
+             (syntax
+              (begin
+                check-syntax-fix
+                (parser-body err (quote ends) table term-sym->index actions src-pos)))))))
       (_
        (raise-syntax-error
         #f
         "parser must have the form (parser args ...)"
         stx))))
 
+  (define (reduce-stack stack num ret-vals src-pos)
+    (cond
+      ((> num 0)
+       (let* ((top-frame (car stack))
+              (ret-vals
+               (if src-pos
+                   (cons (stack-frame-value top-frame)
+                         (cons (stack-frame-start-pos top-frame)
+                               (cons (stack-frame-end-pos top-frame)
+                                     ret-vals)))
+                   (cons (stack-frame-value top-frame) ret-vals))))
+         (reduce-stack (cdr stack) (sub1 num) ret-vals src-pos)))
+      (else (values stack ret-vals))))
 
-)
+  (define-struct stack-frame (state value start-pos end-pos))
+ 
+  (define empty-stack (list (make-stack-frame 0 #f #f #f)))
+    
+  (define (parser-body err ends table term-sym->index actions src-pos)
+    (letrec ((input->token
+              (lambda (ip)
+                (if src-pos
+                    (cond
+                      ((and (list? ip) (= 3 (length ip)))
+                       (let ((tok (car ip)))
+                         (cond
+                           ((symbol? tok) (make-token tok #f))
+                           ((token? tok) tok)
+                           (else (raise-type-error 'parser 
+                                                   "(list (token or symbol) position position)"
+                                                   0 
+                                                   ip)))))
+                      (else
+                       (raise-type-error 'parser 
+                                         "(list (token or symbol) position position)"
+                                         0
+                                         ip)))
+                    (cond
+                      ((symbol? ip) (make-token ip #f))
+                      ((token? ip) ip)
+                      (else (raise-type-error 'parser "token or symbol" 0 ip))))))
+             
+             (fix-error
+              (lambda (stack tok ip get-token)
+                (letrec ((remove-input
+                          (lambda ()
+                            (if (memq (token-name tok) ends)
+                                #f
+                                (let ((a (find-action stack tok ip)))
+                                  (cond
+                                    ((shift? a)
+                                     ;; (printf "shift:~a~n" (shift-state a))
+                                     (cons (if src-pos
+                                               (make-stack-frame (shift-state a)
+                                                                 (if (token? ip) (token-value ip) #f)
+                                                                 (cadr ip)
+                                                                 (caddr ip))
+                                               (make-stack-frame (shift-state a)
+                                                                 (if (token? ip) (token-value ip) #f)
+                                                                 #f
+                                                                 #f))
+                                           stack))
+                                    (else
+                                     ;; (printf "discard input:~a~n" tok)
+                                     (set! ip (get-token))
+                                     (set! tok (input->token ip))
+                                     (remove-input)))))))
+                         (remove-states
+                          (lambda ()
+                            (let ((a (find-action stack (make-token 'error #f) #f)))
+                              (cond
+                                ((shift? a)
+                                 ;; (printf "shift:~a~n" (shift-state a))
+                                 (set! stack 
+                                       (cons
+                                        (if src-pos
+                                           (make-stack-frame (shift-state a) 
+                                                             #f 
+                                                             (cadr ip)
+                                                             (caddr ip))
+                                           (make-stack-frame (shift-state a) 
+                                                             #f
+                                                             #f
+                                                             #f))
+                                        stack))
+                                 (remove-input))
+                                (else
+                                 ;; (printf "discard state:~a~n" (car stack))
+                                 (cond
+                                   ((< (length stack) 2)
+                                    (printf "Unable to shift error token~n")
+                                    #f)					
+                                   (else
+                                    (set! stack (cdr stack))))))))))
+                  (remove-states))))
+             
+             (find-action
+              (lambda (stack tok ip)
+                (array2d-ref table 
+                             (stack-frame-state (car stack))
+                             (hash-table-get term-sym->index
+                                             (token-name tok)
+                                             (lambda ()
+                                               (if src-pos
+                                                   (err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
+                                                   (err #t (token-name tok) (token-value tok)))
+                                               (raise-read-error (format "parser: got token of unknown type ~a" (token-name tok))
+                                                                 #f #f #f #f #f)))))))
+      (lambda (get-token)
+        (let parsing-loop ((stack empty-stack)
+                           (ip (get-token)))
+          (let* ((tok (input->token ip))
+                 (action (find-action stack tok ip)))
+            (cond
+              ((shift? action)
+               ;; (printf "shift:~a~n" (shift-state action))
+               (let ((val (token-value tok)))
+                 (parsing-loop (cons (if src-pos
+                                         (make-stack-frame (shift-state action)
+                                                           val
+                                                           (cadr ip)
+                                                           (caddr ip))
+                                         (make-stack-frame (shift-state action)
+                                                           val
+                                                           #f
+                                                           #f))
+                                     stack)
+                               (get-token))))
+              ((reduce? action)
+               ;; (printf "reduce:~a~n" (reduce-prod-num action))
+               (let-values (((new-stack args)
+                             (reduce-stack stack 
+                                           (reduce-rhs-length action)
+                                           null
+                                           src-pos)))
+                 (let* ((A (reduce-lhs-num action))
+                        (goto (array2d-ref table (stack-frame-state (car new-stack)) A)))
+                   (parsing-loop (cons
+                                  (if src-pos
+                                      (make-stack-frame goto 
+                                                        (apply (vector-ref actions (reduce-prod-num action)) args)
+                                                        (if (null? args) (cadr ip) (cadr args))
+                                                        (if (null? args) 
+                                                            (caddr ip)
+                                                            (list-ref args (- (* (reduce-rhs-length action) 3) 1))))
+                                      (make-stack-frame goto 
+                                                        (apply (vector-ref actions (reduce-prod-num action)) args)
+                                                        #f
+                                                        #f))
+                                  new-stack)
+                                 ip))))
+              ((accept? action)
+               ;; (printf "accept~n")
+               (stack-frame-value (car stack)))
+              (else 
+               (if src-pos
+                   (err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
+                   (err #t (token-name tok) (token-value tok)))
+               (let ((new-stack (fix-error stack tok ip get-token)))
+                 (if new-stack
+                     (parsing-loop new-stack (get-token))
+                     (raise-read-error 
+                      "parser: Could not parse input"
+                      #f #f #f #f #f))))))))))
+  
+  )
