@@ -35,7 +35,6 @@
      ((pred (car list)) (+ 1 (count pred (cdr list))))
      (else (count pred (cdr list)))))
 
-
   ;; display-parser: 
   ;;   action array2d * term vector * non-term vector * kernel vector * 
   ;;     output-port ->
