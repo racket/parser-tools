@@ -242,6 +242,7 @@
 		 (else (if (not (equal? a old))
 			   (array2d-set! v i1 i2 (list a old))))))))
 	   (get-lookahead (compute-LA a g)))
+      (time
       (for-each-state
        (lambda (state)
          (let loop ((i 0))
@@ -268,26 +269,29 @@
 
          (for-each
           (lambda (item)
-            (bit-vector-for-each 
-             (lambda (term-index)
-               (array2d-add! table 
-                             (kernel-index state)
-                             (+ num-non-terms term-index)
-                             (cond
-                               ((not (start-item? item))
-                                (make-reduce
-                                 (item-prod-index item)
-                                 (gram-sym-index (prod-lhs (item-prod item)))
-                                 (vector-length (prod-rhs (item-prod item))))))))
-             (get-lookahead state (item-prod item))))
+            (let ((item-prod (item-prod item)))
+              (bit-vector-for-each 
+               (lambda (term-index)
+                 (array2d-add! table 
+                               (kernel-index state)
+                               (+ num-non-terms term-index)
+                               (cond
+                                 ((not (start-item? item))
+                                  (make-reduce
+                                   (prod-index item-prod)
+                                   (gram-sym-index (prod-lhs item-prod))
+                                   (vector-length (prod-rhs item-prod)))))))
+               (get-lookahead state item-prod))))
 	  
           (append (hash-table-get (lr0-epsilon-trans a) state (lambda () null))
 		  (filter (lambda (item)
 			    (not (move-dot-right item)))
 			  (kernel-items state)))))
-       a)
+       a))
+     
       (resolve-prec-conflicts a table get-term get-prod num-terms
                               num-non-terms)
+     
       (if (not (string=? file ""))
 	  (with-handlers [(exn:i/o:filesystem?
 			   (lambda (e)

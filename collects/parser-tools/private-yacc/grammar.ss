@@ -14,13 +14,13 @@
    (rename make-gram make-grammar)
    
    ;; Things that work on items
-   start-item? item-prod item-prod-index item->string 
+   start-item? item-prod item->string 
    sym-at-dot move-dot-right item<? nullable-after-dot?
 
    ;; Things that operate on grammar symbols
    gram-sym-symbol gram-sym-index term-prec gram-sym->string
    non-term? term? nullable? non-term<? term<?
-   term-list->bit-vector
+   term-list->bit-vector term-index non-term-index
    
    ;; Things that work on precs
    prec-num prec-assoc
@@ -46,9 +46,7 @@
 
   (define (export-make-item a b)
     (make-item a b #f))
-  
-  (define (item-prod-index x)
-    (prod-index (item-prod x)))
+ 
   
   ;; item<?: LR-item * LR-item -> bool
   ;; Lexicographic comparison on two items.

@@ -78,8 +78,9 @@
                                          (kernel-index p)
                                          (prod-index prod)
                                          (make-trans-key state non-term)))
-                       (loop new-i
-                             (run-automaton p next-sym a))))))
+                       (if next-sym
+                           (loop new-i
+                                 (run-automaton p next-sym a)))))))
              (get-nt-prods g non-term)))
           non-terms))
        a)
