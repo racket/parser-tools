@@ -3,10 +3,12 @@
   ;; Provides the syntax used to create lexers and the functions needed to
   ;; create and use the buffer that the lexer reads from.  See doc.txt.
 	
-  (require-for-syntax "private-lex/util.ss"
+  (require-for-syntax (lib "define.ss" "syntax")
+                      "private-lex/util.ss"
                       "private-lex/actions.ss"
                       "private-lex/front.ss"
                       "private-lex/unicode-chars.ss")
+                      
 
   (require (lib "readerr.ss" "syntax")
 	   (lib "cffi.ss" "compiler")
@@ -119,6 +121,18 @@
         "Form should be (define-lex-abbrevs (name re) ...)"
         stx))))
 
+  (define-syntax (define-lex-trans stx)
+    (syntax-case stx ()
+      ((_ name-form body-form)
+       (let-values (((name body)
+                     (normalize-definition (syntax (define-syntax name-form body-form) #'lambda))))
+         #`(define-syntax name (make-lex-trans body))))
+      (_
+       (raise-syntax-error
+        #f
+        "Form should be (define-lex-trans name transformer)"
+        stx))))
+       
 
   (define (get-next-state-helper char min max table)
     (if (>= min max)

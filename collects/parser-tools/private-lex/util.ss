@@ -4,6 +4,7 @@
   (provide (all-defined))
   
   (define-struct lex-abbrev (abbrev))
+  (define-struct lex-trans (f))
   
   #;(define-syntax test-block
     (syntax-rules ()
