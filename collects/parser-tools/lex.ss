@@ -131,7 +131,7 @@
 	 (cons (lex-buffer-col lb)
 	       (lex-buffer-line-lengths lb)))
 	(set-lex-buffer-line! lb (add1 (lex-buffer-line lb)))
-	(set-lex-buffer-col! lb 0))
+	(set-lex-buffer-col! lb 1))
        (else
 	(set-lex-buffer-col! lb (add1 (lex-buffer-col lb)))))
       (set-lex-buffer-offset! lb (add1 (lex-buffer-offset lb)))
