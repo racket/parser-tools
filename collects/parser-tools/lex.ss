@@ -39,10 +39,24 @@
                                     (no-lookahead-stx (table-no-lookahead table))
                                     (actions-stx `(vector ,@(vector->list (table-actions table)))))
                         (if wrap?
-                            (syntax (lambda (lb)
-                                      (lexer-body lb start-state-stx trans-table-stx eof-table-stx actions-stx no-lookahead-stx #t)))
-                            (syntax (lambda (lb)
-                                      (lexer-body lb start-state-stx trans-table-stx eof-table-stx actions-stx no-lookahead-stx #f)))))))))))))
+                            (syntax 
+                             (let-values (((a b c d e)
+                                           (values start-state-stx 
+                                                   trans-table-stx
+                                                   eof-table-stx
+                                                   actions-stx
+                                                   no-lookahead-stx)))
+                               (lambda (lb)
+                                 (lexer-body lb a b c d e #t))))
+                            (syntax 
+                             (let-values (((a b c d e)
+                                           (values start-state-stx 
+                                                   trans-table-stx
+                                                   eof-table-stx
+                                                   actions-stx
+                                                   no-lookahead-stx)))
+                               (lambda (lb)
+                                 (lexer-body lb a b c d e #f))))))))))))))
       (values
        (build-lexer #f)
        (build-lexer #t))))
