@@ -5,7 +5,8 @@
 	
   (require-for-syntax "private-lex/util.ss"
                       "private-lex/actions.ss"
-                      "private-lex/front.ss")
+                      "private-lex/front.ss"
+                      "private-lex/unicode-chars.ss")
 
   (require (lib "readerr.ss" "syntax")
 	   (lib "cffi.ss" "compiler")
@@ -13,7 +14,9 @@
 
   (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs
 	   position-offset position-line position-col position?
-           define-tokens define-empty-tokens token-name token-value token? file-path)
+           define-tokens define-empty-tokens token-name token-value token? file-path
+           any-char any-string nothing alphabetic lower-case upper-case title-case
+           numeric symbolic punctuation graphic whitespace blank iso-control)
   
   (define file-path (make-parameter #f))
   
@@ -249,5 +252,45 @@
   (define (get-position ip)
     (let-values (((line col off) (port-next-location ip)))
       (make-position off line col)))
+  
+  
+  (define-syntax (create-unicode-abbrevs stx)
+    (syntax-case stx ()
+      ((_ ctxt)
+       (with-syntax (((ranges ...) (map (lambda (range)
+                                          `(: ,@(map (lambda (x) `(- ,(integer->char (car x))
+                                                                     ,(integer->char (cdr x))))
+                                                     range)))
+                                        (list alphabetic-ranges
+                                              lower-case-ranges
+                                              upper-case-ranges
+                                              title-case-ranges
+                                              numeric-ranges
+                                              symbolic-ranges
+                                              punctuation-ranges
+                                              graphic-ranges
+                                              whitespace-ranges
+                                              blank-ranges
+                                              iso-control-ranges)))
+                     ((names ...) (map (lambda (sym)
+                                         (datum->syntax-object (syntax ctxt) sym #f))
+                                       '(alphabetic
+                                         lower-case
+                                         upper-case
+                                         title-case
+                                         numeric
+                                         symbolic
+                                         punctuation
+                                         graphic
+                                         whitespace
+                                         blank
+                                         iso-control))))
+         (syntax (define-lex-abbrevs (names ranges) ...))))))
+                                             
+  (define-lex-abbrev any-char (^))
+  (define-lex-abbrev any-string (&))
+  (define-lex-abbrev nothing (:))
+  (create-unicode-abbrevs #'here)
+  
 
 )
