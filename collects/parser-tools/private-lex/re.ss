@@ -32,8 +32,8 @@
   (define-struct (concatR re) (re1 re2) (make-inspector))
   (define-struct (repeatR re) (re))
   (define-struct (orR re) (res) (make-inspector))
-  (define-struct (andR re) (res))
-  (define-struct (negR re) (re))
+  (define-struct (andR re) (res) (make-inspector))
+  (define-struct (negR re) (re) (make-inspector))
 
   ;; e : re
   ;; The unique epsilon re
@@ -52,12 +52,14 @@
   ;;      | (+ s-re)                   match 1 or more
   ;;      | (? s-re)                   match 0 or 1
   ;;      | (: s-re ...)               match one of the sub-expressions
+  ;;      | (& s-re ...)               match iff all sub-expressions match
+  ;;      | (~ s-re)                   match iff s-re doesn't match
   ;;      | (@ s-re ...)               match each sub-expression in succession
   ;;      | (- char char)              match any character between two (inclusive)
-  ;;      | (^ char_or_range ...1)     match any character not listed
-  ;; (the null concatenation `(@) means epsilon as does "".
-  ;;  the null or `(:) means match nothing.  The null carat `(^) means match
-  ;;  any character.)
+  ;;      | (^ char_or_range ...)     match any character not listed
+  ;; (The null concatenation `(@) means epsilon as does "".
+  ;;  The null or `(:) means match nothing.  The null carat `(^) means match
+  ;;  any character.  The null intersection `(&) means match string.)
 
   ;; ->re : s-re cache -> re
   (define (->re exp cache)
@@ -76,8 +78,17 @@
               c
               (build-or (list e c) cache))))
       (`(: ,rs ...)
-        (build-or (flatten-res (map (lambda (r) (->re r cache)) rs) cache)
+        (build-or (flatten-res (map (lambda (r) (->re r cache)) rs)
+                               orR? orR-res merge cache)
                   cache))
+      (`(& ,rs ...)
+        (build-and (flatten-res (map (lambda (r) (->re r cache)) rs)
+                                andR? andR-res (lambda (a b)
+                                                 (let-values (((i _ __) (split a b))) i))
+                                cache)
+                   cache))
+      (`(~ ,r)
+        (build-neg (->re r cache) cache))
       (`(@ ,rs ...)
         (foldr (lambda (x y)
                  (build-concat (->re x cache) y cache))
@@ -111,22 +122,26 @@
 
         
 
-  ;; flatten-res: (list-of re) cache -> (list-of re)
-  ;; Takes all the char-sets in l and combines them into one element.
-  ;; Removes orRs too,
-  (define (flatten-res l cache)
+  ;; flatten-res: (list-of re) (re -> bool) (re -> (list-of re))
+  ;;              ((list-of char) (list-of char) -> (list-of char)) cache -> (list-of re)
+  ;; Takes all the char-sets in l and combines them into one element using the combine function.
+  ;; Flattens out the values of type?.  get-res only needs to function on things type? returns
+  ;; true for.
+  (define (flatten-res l type? get-res combine cache)
     (let loop ((res l)
-               (chars null)
+               (chars #f)
                (no-chars null))
       (cond
         ((null? res) 
-         (if (null? chars)
-             no-chars
-             (cons (build-char-set (mergesort chars char<?) cache) no-chars)))
+         (if chars
+             (cons (build-char-set (mergesort chars char<?) cache) no-chars)
+             no-chars))
         ((char-setR? (car res))
-         (loop (cdr res) (merge (char-setR-chars (car res)) chars) no-chars))
-        ((orR? (car res))
-         (loop (append (orR-res (car res)) (cdr res)) chars no-chars))
+         (if chars
+             (loop (cdr res) (combine (char-setR-chars (car res)) chars) no-chars)
+             (loop (cdr res) (char-setR-chars (car res)) no-chars)))
+        ((type? (car res))
+         (loop (append (get-res (car res)) (cdr res)) chars no-chars))
         (else (loop (cdr res) chars (cons (car res) no-chars))))))
     
   ;; build-epsilon : -> re
@@ -181,6 +196,7 @@
       (cond
         ((null? rs) z)
         ((null? (cdr rs)) (car rs))
+        ((memq (build-neg z cache) rs) (build-neg z cache))
         (else
          (cache (cons 'or (map re-index rs))
                 (lambda ()
@@ -188,9 +204,11 @@
   
   ;; build-and : (list-of re) cache -> re
   (define (build-and rs cache)
-    (let ((rs (do-simple-equiv (replace rs andR? andR-res null) rs)))
+    (let ((rs (do-simple-equiv (replace rs andR? andR-res null) re-index)))
       (cond
-        ((ormap (lambda (x) (eq? x z)) rs) z)
+        ((null? rs) (build-neg z cache))
+        ((null? (cdr rs)) (car rs))
+        ((memq z rs) z)
         (else
          (cache (cons 'and (map re-index rs))
                 (lambda ()
@@ -198,57 +216,77 @@
       
   ;; build-neg : re cache -> re
   (define (build-neg r cache)
-    (cache (cons 'neg (re-index r))
-           (lambda ()
-             (make-negR (not (re-nullable? r)) (get-index) r))))
+    (cond
+      ((negR? r) (negR-re r))
+      (else
+       (cache (cons 'neg (re-index r))
+              (lambda ()
+                (make-negR (not (re-nullable? r)) (get-index) r))))))
   
+  ;; Tests for the build-functions
   (test-block ((c (make-cache))
-               (r1 (->re #\1 c))
-               (r2 (->re #\2 c))
-               (r3 (->re #\3 c))
-               (rc (->re `(@ ,r1 ,r2) c))
-               (rc2 (->re `(@ ,r2 ,r1) c))
-               (rc3 (->re `(@ ,r1 ,r2 ,r3) c))
-               (rr (->re `(* ,rc) c))
-               (ro (->re `(: ,rr ,rc ,rr) c))
-               (ro2 (->re `(: ,rc ,rr ,z) c))
-               (ro3 (->re `(: ,rr ,rc) c))
-               (real1 (->re `(+ (: (@ "|" (* (^ "|")) "|")
-                                   (@ "|" (* (^ "|"))))) c)))
+               (r1 (build-char-set `(#\1) c))
+               (r2 (build-char-set `(#\2) c))
+               (r3 (build-char-set `(#\3) c))
+               (rc (build-concat r1 r2 c))
+               (rc2 (build-concat r2 r1 c))
+               (rr (build-repeat rc c))
+               (ro (build-or `(,rr ,rc ,rr) c))
+               (ro2 (build-or `(,rc ,rr ,z) c))
+               (ro3 (build-or `(,rr ,rc) c))
+               (ro4 (build-or `(,(build-or `(,r1 ,r2) c)
+                                 ,(build-or `(,r2 ,r3) c)) c))
+               (ra (build-and `(,rr ,rc ,rr) c))
+               (ra2 (build-and `(,rc ,rr) c))
+               (ra3 (build-and `(,rr ,rc) c))
+               (ra4 (build-and `(,(build-and `(,r3 ,r2) c)
+                                  ,(build-and `(,r2 ,r1) c)) c))
+               (rn (build-neg z c))
+               (rn2 (build-neg r1 c)))
+               
               ((char-setR-chars r1) `(#\1))
               ((char-setR-chars r2) `(#\2))
               ((char-setR-chars r3) `(#\3))
+              ((build-char-set null c) z)
+              ((build-concat r1 e c) r1)
+              ((build-concat e r1 c) r1)
+              ((build-concat r1 z c) z)
+              ((build-concat z r1 c) z)
+              ((build-concat r1 r2 c) rc)
+              ((concatR-re1 rc) r1)
+              ((concatR-re2 rc) r2)
+              ((concatR-re1 rc2) r2)
+              ((concatR-re2 rc2) r1)
               (ro ro2)
               (ro ro3)
-              ((->re `(* ,rc) c) rr)
-              ((build-char-set null c) z)
-              ((->re `(@) c) e)
-              ((->re `(:) c) z)
-              ((->re `(@ ,r1 (epsilon)) c) r1)
-              ((->re `(@ (epsilon) ,r1) c) r1)
-              ((->re `(@ ,r1 ,z) c) z)
-              ((->re `(@ ,z ,r1) c) z)
-              ((->re `(@ ,z (epsilon)) c) z)
-              ((->re `(@ (epsilon) ,z) c) z)
-              ((->re `(:) c) z)
-              ((->re `(: ,rr) c) rr)
-              ((build-or `(,z ,r1 ,z) c) r1)
-              ((build-or (list
-                          (build-or (list r1 r2) c)
-                          (build-or (list rc rr) c))
-                         c)
-               (build-or (list r1 r2 rc rr) c))
-              ((concatR-re1 rc3) r1)
-              ((concatR-re1 (concatR-re2 rc3)) r2)
-              ((concatR-re2 (concatR-re2 rc3)) r3)
+              (ro4 (build-or `(,r1 ,r2 ,r3) c))
               ((orR-res ro) (list rc rr))
+              ((orR-res ro4) (list r1 r2 r3))
+              ((build-or null c) z)
+              ((build-or `(,r1 ,z) c) r1)
+              ((build-repeat rc c) rr)
               ((repeatR-re rr) rc)
+              (ra ra2)
+              (ra ra3)
+              (ra4 (build-and `(,r1 ,r2 ,r3) c))
+              ((andR-res ra) (list rc rr))
+              ((andR-res ra4) (list r1 r2 r3))
+              ((build-and null c) (build-neg z c))
+              ((build-and `(,r1 ,z) c) z)
+              ((build-and `(,r1) c) r1)
+              ((build-neg r1 c) (build-neg r1 c))
+              ((build-neg (build-neg r1 c) c) r1)
+              ((negR-re (build-neg r2 c)) r2)
               ((re-nullable? r1) #f)
               ((re-nullable? rc) #f)
-              ((re-nullable? (->re `(@ ,rr ,rr) c)) #t)
+              ((re-nullable? (build-concat rr rr c)) #t)
               ((re-nullable? rr) #t)
               ((re-nullable? ro) #t)
-              ((re-nullable? (->re `(: ,r1 ,r2) c)) #f))
+              ((re-nullable? (build-or `(,r1 ,r2) c)) #f)
+              ((re-nullable? (build-and `(,r1 ,e) c)) #f)
+              ((re-nullable? (build-and `(,rr ,e) c)) #t)
+              ((re-nullable? (build-neg r1 c)) #t)
+              ((re-nullable? (build-neg rr c)) #f))
               
   (test-block ((c (make-cache))
                (r1 (->re #\1 c))
@@ -257,12 +295,19 @@
                (r4 (build-or `(,r1 ,r2) c))
                (r5 (->re `(: ,r3-5 #\7) c))
                (r6 (->re #\6 c)))
-              ((flatten-res null c) null)
-              ((char-setR-chars (car (flatten-res `(,r1) c))) '(#\1))
-              ((char-setR-chars (car (flatten-res `(,r4) c))) '(#\1 #\2))
-              ((char-setR-chars (car (flatten-res `(,r6 ,r5 ,r4 ,r3-5 ,r2 ,r1) c)))
-               (string->list "1234567")))
+              ((flatten-res null orR? orR-res merge c) null)
+              ((char-setR-chars (car (flatten-res `(,r1) orR? orR-res merge c))) '(#\1))
+              ((char-setR-chars (car (flatten-res `(,r4) orR? orR-res merge c))) '(#\1 #\2))
+              ((char-setR-chars (car (flatten-res `(,r6 ,r5 ,r4 ,r3-5 ,r2 ,r1) orR? orR-res merge c)))
+               (string->list "1234567"))
+              ((flatten-res `(,r1 ,r2) andR? andR-res (lambda (x y)
+                                                        (let-values (((i _ __)
+                                                                      (split x y)))
+                                                          i))
+                            c)
+               (list z)))
   
+  ;; ->re
   (test-block ((c (make-cache))
                (r (->re #\a c))
                (rr (->re `(@ ,r ,r) c))
@@ -285,6 +330,18 @@
               ((->re `(: ,rr ,rrr) c) (build-or (list rr rrr) c))
               ((->re `(: ,r) c) r)
               ((->re `(:) c) z)
+              ((->re `(& (& #\111 (^ (- #\000 #\110) (- #\112 #\377)))
+                         (& (* #\2))) c)
+               (build-and (list (build-char-set '(#\111) c)
+                                (build-repeat (build-char-set '(#\2) c) c))
+                          c))
+              ((->re `(& (& #\000 (^ (- #\000 #\110) (- #\112 #\377)))
+                         (& (* #\2))) c)
+               z)
+              ((->re `(& ,rr ,rrr) c) (build-and (list rr rrr) c))
+              ((->re `(& ,r) c) r)
+              ((->re `(&) c) (build-neg z c))
+              ((->re `(~ ,r) c) (build-neg r c))
               ((->re `(@) c) e)
               ((->re `(@ ,rrr*) c) rrr*)
               (rr (build-concat r r c))

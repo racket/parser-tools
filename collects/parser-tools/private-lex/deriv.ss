@@ -9,38 +9,52 @@
   (define e (build-epsilon))
   (define z (build-zero))
   
-  ;; get-char-groups : re -> (list-of char-setR?)
+  
+  ;; Don't do anything with this one but extract the chars
+  (define all-chars (->re `(^) (make-cache)))
+  
+  ;; get-char-groups : re bool -> (list-of char-setR?)
   ;; Collects the char-setRs in r that could be used in
   ;; taking the derivative of r.
-  (define (get-char-groups r)
+  (define (get-char-groups r found-negation)
     (cond
       ((or (eq? r e) (eq? r z)) null)
       ((char-setR? r) (list r))
       ((concatR? r)
        (if (re-nullable? (concatR-re1 r))
-           (append (get-char-groups (concatR-re1 r))
-                   (get-char-groups (concatR-re2 r)))
-           (get-char-groups (concatR-re1 r))))
+           (append (get-char-groups (concatR-re1 r) found-negation)
+                   (get-char-groups (concatR-re2 r) found-negation))
+           (get-char-groups (concatR-re1 r) found-negation)))
       ((repeatR? r)
-       (get-char-groups (repeatR-re r)))
+       (get-char-groups (repeatR-re r) found-negation))
       ((orR? r)
-       (apply append (map get-char-groups (orR-res r))))))
+       (apply append (map (lambda (x) (get-char-groups x found-negation)) (orR-res r))))
+      ((andR? r)
+       (apply append (map (lambda (x) (get-char-groups x found-negation)) (andR-res r))))
+      ((negR? r)
+       (if found-negation
+           (get-char-groups (negR-re r) #t)
+           (cons all-chars (get-char-groups (negR-re r) #t))))))
 
   (test-block ((c (make-cache))
                (r1 (->re #\1 c))
                (r2 (->re #\2 c)))
-              ((get-char-groups e) null)
-              ((get-char-groups z) null)
-              ((get-char-groups r1) (list r1))
-              ((get-char-groups (->re `(@ ,r1 ,r2) c))
+              ((get-char-groups e #f) null)
+              ((get-char-groups z #f) null)
+              ((get-char-groups r1 #f) (list r1))
+              ((get-char-groups (->re `(@ ,r1 ,r2) c) #f)
                (list r1))
-              ((get-char-groups (->re `(@ ,e ,r2) c)) 
+              ((get-char-groups (->re `(@ ,e ,r2) c) #f) 
                (list r2))
-              ((get-char-groups (->re `(@ (* ,r1) ,r2) c)) 
+              ((get-char-groups (->re `(@ (* ,r1) ,r2) c) #f) 
                (list r1 r2))
-              ((get-char-groups (->re `(* ,r1) c)) 
+              ((get-char-groups (->re `(* ,r1) c) #f) 
                (list r1))
-              ((get-char-groups (->re `(: (* ,r1) (@ (* ,r2) "3") "4") c))
+              ((get-char-groups (->re `(: (* ,r1) (@ (* ,r2) "3") "4") c) #f)
+               (list r1 r2 (->re "3" c) (->re "4" c)))
+              ((get-char-groups (->re `(~ ,r1) c) #f) 
+               (list all-chars r1))
+              ((get-char-groups (->re `(& (* ,r1) (@ (* ,r2) "3") "4") c) #f)
                (list r1 r2 (->re "3" c) (->re "4" c)))
               )
                
@@ -130,7 +144,9 @@
                (r4 (->re `(@ #\a ,r2) c))
                (r5 (->re `(* ,r4) c))
                (r6 (->re `(: ,r5 #\a) c))
-               (r7 (->re `(@ ,r2 ,r2) c)))
+               (r7 (->re `(@ ,r2 ,r2) c))
+               (r8 (->re `(~ ,r4) c))
+               (r9 (->re `(& ,r2 ,r3) c)))
               ((deriveR e #\a c) z)
               ((deriveR z #\a c) z)
               ((deriveR r1 #\b c) z)
@@ -146,8 +162,11 @@
               ((deriveR r6 #\a c) (->re `(: (@ ,r2 ,r5) (epsilon)) c))
               ((deriveR r6 #\b c) z)
               ((deriveR r7 #\a c) (->re `(: (@ ,r2 ,r2) ,r2) c))
-              ((deriveR r7 #\b c) z))
-  
+              ((deriveR r7 #\b c) z)
+              ((deriveR r8 #\a c) (->re `(~, r2) c))
+              ((deriveR r8 #\b c) (->re `(~ ,z) c))
+              ((deriveR r9 #\a c) (->re `(& ,r2 (@ ,r2 ,r3)) c))
+              ((deriveR r9 #\b c) z))
   
   ;; An re-action is (cons re action)
 
@@ -217,7 +236,7 @@
       ((null? st) null)
       (else
        (partition (map char-setR-chars
-                       (apply append (map (lambda (x) (get-char-groups (car x)))
+                       (apply append (map (lambda (x) (get-char-groups (car x) #f))
                                           (state-spec (car st)))))))))
   
   (test-block ((c (make-cache))
@@ -322,6 +341,13 @@
   (define t7 (build-test-dfa `((@ (* #\a) (* #\b) (* #\c) (* #\d) (* #\e)))))
   (define t8
     (build-test-dfa `((@ (* (: #\a #\b)) #\a (: #\a #\b) (: #\a #\b) (: #\a #\b) (: #\a #\b)))))
+  (define t9 (build-test-dfa `((@ "/*"
+                                  (~ (@ (&) "*/" (&)))
+                                  "*/"))))
+  (define t11 (build-test-dfa `((~ "1"))))
+  (define t12 (build-test-dfa `((@ (& (@ (* "a") "b")
+                                      (@ "a" (* "b")))
+                                   "ab"))))
   (define x (build-test-dfa `((: " " "\n" ",")
                               (@ (? "-") (+ (- "0" "9")))
                               (@ "-" (+ "-"))
@@ -329,5 +355,8 @@
                               "]")))
   (define y (build-test-dfa `((+ (: (@ "|" (* (^ "|")) "|")
                                     (@ "|" (* (^ "|"))))))))
+  (define t13 (build-test-dfa `((& (@ (&) "111" (&))
+                                 (~ (: (@ (&) "01")
+                                       (+ "1")))))))
 |#
   )
