@@ -94,14 +94,6 @@
         "Form should be (define-lex-abbrevs (name re) ...)"
         stx))))
 
-  (require (lib "cffi.ss" "compiler"))
-  (define get-next-state ;;(lambda (input-char state eof-table trans-table)
-    (c-lambda (scheme-object int scheme-object scheme-object) int
-	      "if (SCHEME_EOFP(___arg1))
-	         return (SCHEME_VEC_ELS(___arg3))[___arg2];
-	       else
-	         return (SCHEME_VEC_ELS(___arg4))[SCHEME_CHAR_VAL(___arg1) | ___arg2 << 8]; "))
-
   (define (lexer-body start-state trans-table eof-table actions no-lookahead wrap?)
     (lambda (lb)
       (unless (lex-buffer? lb)
@@ -125,7 +117,7 @@
                          (length 1)
                          ;; how many characters are in the longest match
                          (longest-match-length 1))
-          (let ((next-state
+          (let ((next-state 
                  (cond
 		  ((eof-object? char)
 		   (vector-ref eof-table state))
