@@ -14,7 +14,7 @@
 	   (lib "cffi.ss" "compiler")
            "private-lex/token.ss")
 
-  (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs
+  (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs define-lex-trans
 	   position-offset position-line position-col position?
            define-tokens define-empty-tokens token-name token-value token? file-path
            any-char any-string nothing alphabetic lower-case upper-case title-case
@@ -28,15 +28,16 @@
 	     (lambda (stx)
 	       (syntax-case stx ()
 		 ((_)
-		  (raise-syntax-error #f "empty lexer is not allowed" stx))
+		  (raise-syntax-error #f "accepts the empty string" stx))
 		 ((_ re-act ...)
 		  (begin
 		    (for-each
 		     (lambda (x)
 		       (syntax-case x ()
 			 ((re act) (void))
-			 (_ (raise-syntax-error 'lexer 
-						"expects regular expression / action pairs"
+			 (_ (raise-syntax-error #f
+						"not a regular expression / action pair"
+                                                stx
 						x))))
 		     (syntax->list (syntax (re-act ...))))
                     (let* ((spec/re-act-lst
@@ -88,13 +89,14 @@
   (define-syntax (define-lex-abbrev stx)
     (syntax-case stx ()
       ((_ name re)
+       (identifier? (syntax name))
        (syntax
         (define-syntax name
           (make-lex-abbrev (quote-syntax re)))))
       (_ 
        (raise-syntax-error
         #f
-        "Form should be (define-lex-abbrev name re)"
+        "form should be (define-lex-abbrev name re)"
         stx))))
 
   (define-syntax (define-lex-abbrevs stx)
@@ -107,8 +109,9 @@
                            (identifier? (syntax name))
                            (syntax (define-lex-abbrev name re)))
                           (_ (raise-syntax-error
-                              'Lexer-abbreviation 
-                              "Form should be (identifier value)"
+                              #f
+                              "form should be (define-lex-abbrevs (name re) ...)"
+                              stx
                               a))))
                       abbrev)))
          (datum->syntax-object
@@ -118,19 +121,19 @@
       (_
        (raise-syntax-error
         #f
-        "Form should be (define-lex-abbrevs (name re) ...)"
+        "form should be (define-lex-abbrevs (name re) ...)"
         stx))))
 
   (define-syntax (define-lex-trans stx)
     (syntax-case stx ()
       ((_ name-form body-form)
        (let-values (((name body)
-                     (normalize-definition (syntax (define-syntax name-form body-form) #'lambda))))
-         #`(define-syntax name (make-lex-trans body))))
+                     (normalize-definition (syntax (define-syntax name-form body-form)) #'lambda)))
+         #`(define-syntax #,name (make-lex-trans #,body))))
       (_
        (raise-syntax-error
         #f
-        "Form should be (define-lex-trans name transformer)"
+        "form should be (define-lex-trans name transformer)"
         stx))))
        
 

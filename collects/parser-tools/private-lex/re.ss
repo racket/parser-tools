@@ -7,8 +7,8 @@
   (provide ->re build-epsilon build-zero build-char-set build-concat
            build-repeat build-or build-and build-neg
            epsilonR? zeroR? char-setR? concatR? repeatR? orR? andR? negR?
-           char-setR-chars concatR-re1 concatR-re2 repeatR-re orR-res
-           andR-res negR-re
+           char-setR-chars concatR-re1 concatR-re2 repeatR-re repeatR-low repeatR-high
+           orR-res andR-res negR-re
            re-nullable? re-index)
   
   (define max-char-num #x7FFFFFFF)
@@ -21,9 +21,9 @@
   ;; - (make-zeroR bool nat)
   ;; - (make-char-setR bool nat char-set)
   ;; - (make-concatR bool nat re re)
-  ;; - (make-repeatR bool nat re)
-  ;; - (make-orR bool nat (list-of re))          Must not directly contain any orRs
-  ;; - (make-andR bool nat (list-of re))         Must not directly contain any andRs
+  ;; - (make-repeatR bool nat nat nat-or-+inf.0 re)
+  ;; - (make-orR bool nat (list-of re))    Must not directly contain any orRs
+  ;; - (make-andR bool nat (list-of re))   Must not directly contain any andRs
   ;; - (make-negR bool nat re)
   ;;
   ;; Every re must have an index field globally different from all
@@ -33,7 +33,7 @@
   (define-struct (zeroR re) () (make-inspector))
   (define-struct (char-setR re) (chars) (make-inspector))
   (define-struct (concatR re) (re1 re2) (make-inspector))
-  (define-struct (repeatR re) (re) (make-inspector))
+  (define-struct (repeatR re) (low high re) (make-inspector))
   (define-struct (orR re) (res) (make-inspector))
   (define-struct (andR re) (res) (make-inspector))
   (define-struct (negR re) (re) (make-inspector))
@@ -47,23 +47,23 @@
   (define z (make-zeroR #f (get-index)))
 
 
-  ;; s-re = char                       match the given character
-  ;;      | string                     match its sequence of characters
+  ;; s-re = char                       constant
+  ;;      | string                     constant (sequence of characters)
   ;;      | re                         a precompiled re
-  ;;      | (epsilon)                  match the empty string
-  ;;      | (* s-re)                   match 0 or more
-  ;;      | (+ s-re)                   match 1 or more
-  ;;      | (? s-re)                   match 0 or 1
-  ;;      | (: s-re ...)               match one of the sub-expressions
-  ;;      | (& s-re ...)               match iff all sub-expressions match
-  ;;      | (~ s-re)                   match iff s-re doesn't match
-  ;;      | (@ s-re ...)               match each sub-expression in succession
-  ;;      | (- char char)              match any character between two (inclusive)
-  ;;      | (^ char_or_range ...)     match any character not listed
-  ;; (The null concatenation `(@) means epsilon as does "".
-  ;;  The null or `(:) means match nothing.  The null carat `(^) means match
-  ;;  any character.  The null intersection `(&) means match string.)
-
+  ;;      | (repeat low high s-re)     repetition between low and high times (inclusive)
+  ;;      | (union s-re ...)           
+  ;;      | (intersection s-re ...)    
+  ;;      | (complement s-re)          
+  ;;      | (concatenation s-re ...)   
+  ;;      | (char-range rng rng)       match any character between two (inclusive)
+  ;;      | (char-complement char-set) match any character not listed
+  ;; low = natural-number
+  ;; high = natural-number or +inf.0
+  ;; rng = char or string with length 1
+  ;; (concatenation) (repeat 0 0 x), and "" match the empty string.
+  ;; (union) matches no strings.
+  ;; (intersection) matches any string.
+  
   (define loc:make-range is:make-range)
   (define loc:union is:union)
   (define loc:split is:split)
@@ -73,43 +73,35 @@
   (define (->re exp cache)
     (match exp
       ((? char?) (build-char-set (loc:make-range (char->integer exp)) cache))
-      ((? string?) (->re `(@ ,@(string->list exp)) cache))
+      ((? string?) (->re `(concatenation ,@(string->list exp)) cache))
       ((? re?) exp)
-      (`(epsilon) (build-epsilon))
-      (`(* ,r)
-        (build-repeat (->re r cache) cache))
-      (`(+ ,r)
-        (->re `(@ ,r (* ,r)) cache))
-      (`(? ,r)
-        (let ((c (->re r cache)))
-          (if (re-nullable? c)
-              c
-              (build-or (list e c) cache))))
-      (`(: ,rs ...)
+      (`(repeat ,low ,high ,r)
+        (build-repeat low high (->re r cache) cache))
+      (`(union ,rs ...)
         (build-or (flatten-res (map (lambda (r) (->re r cache)) rs)
                                orR? orR-res loc:union cache)
                   cache))
-      (`(& ,rs ...)
+      (`(intersection ,rs ...)
         (build-and (flatten-res (map (lambda (r) (->re r cache)) rs)
                                 andR? andR-res (lambda (a b)
                                                  (let-values (((i _ __) (loc:split a b))) i))
                                 cache)
                    cache))
-      (`(~ ,r)
+      (`(complement ,r)
         (build-neg (->re r cache) cache))
-      (`(@ ,rs ...)
+      (`(concatenation ,rs ...)
         (foldr (lambda (x y)
                  (build-concat (->re x cache) y cache))
                e
                rs))
-      (`(- ,c1 ,c2)
+      (`(char-range ,c1 ,c2)
         (let ((i1 (char->integer (if (string? c1) (string-ref c1 0) c1)))
               (i2 (char->integer (if (string? c2) (string-ref c2 0) c2))))
           (if (<= i1 i2)
               (build-char-set (loc:make-range i1 i2) cache)
               z)))
-      (`(^ ,crs ...)
-        (let ((cs (->re `(: ,@crs) cache)))
+      (`(char-complement ,crs ...)
+        (let ((cs (->re `(union ,@crs) cache)))
           (cond
             ((zeroR? cs) (build-char-set (loc:make-range 0 max-char-num) cache))
             ((char-setR? cs)
@@ -174,15 +166,25 @@
                                   (get-index)
                                   r1 r2))))))
   
-  ;; build-repeat : re cache -> re
-  (define (build-repeat r cache)
-    (cond
-      ((eq? z r) e)
-      ((repeatR? r) r)
-      (else
-       (cache (cons 'repeat (re-index r))
-              (lambda ()
-                (make-repeatR #t (get-index) r))))))
+  ;; build-repeat : nat nat-or-+inf.0 re cache -> re
+  (define (build-repeat low high r cache)
+    (let ((low (if (< low 0) 0 low)))
+      (cond
+        ((eq? r e) e)
+        ((and (= 0 low) (or (= 0 high) (eq? z r))) e)
+        ((and (= 1 low) (= 1 high)) r)
+        ((and (repeatR? r)
+              (eq? (repeatR-high r) +inf.0)
+              (or (= 0 (repeatR-low r))
+                  (= 1 (repeatR-low r))))
+         (build-repeat (* low (repeatR-low r))
+                       +inf.0
+                       (repeatR-re r)
+                       cache))
+        (else
+         (cache (cons 'repeat (cons low (cons high (re-index r))))
+                (lambda ()
+                  (make-repeatR (or (re-nullable? r) (= 0 low)) (get-index) low high r)))))))
   
   
   ;; build-or : (list-of re) cache -> re
@@ -229,7 +231,7 @@
                (r3 (build-char-set (is:make-range (char->integer #\3)) c))
                (rc (build-concat r1 r2 c))
                (rc2 (build-concat r2 r1 c))
-               (rr (build-repeat rc c))
+               (rr (build-repeat 0 +inf.0 rc c))
                (ro (build-or `(,rr ,rc ,rr) c))
                (ro2 (build-or `(,rc ,rr ,z) c))
                (ro3 (build-or `(,rr ,rc) c))
@@ -263,9 +265,18 @@
               ((orR-res ro4) (list r1 r2 r3))
               ((build-or null c) z)
               ((build-or `(,r1 ,z) c) r1)
-              ((build-repeat rc c) rr)
-              ((build-repeat z c) e)
-              ((build-repeat (build-repeat rc c) c) (build-repeat rc c))
+              ((build-repeat 0 +inf.0 rc c) rr)
+              ((build-repeat 0 1 z c) e)
+              ((build-repeat 0 0 rc c) e)
+              ((build-repeat 0 +inf.0 z c) e)
+              ((build-repeat -1 +inf.0 z c) e)
+              ((build-repeat 0 +inf.0 (build-repeat 0 +inf.0 rc c) c)
+               (build-repeat 0 +inf.0 rc c))
+              ((build-repeat 20 20 (build-repeat 0 +inf.0 rc c) c)
+               (build-repeat 0 +inf.0 rc c))
+              ((build-repeat 20 20 (build-repeat 1 +inf.0 rc c) c)
+               (build-repeat 20 +inf.0 rc c))
+              ((build-repeat 1 1 rc c) rc)
               ((repeatR-re rr) rc)
               (ra ra2)
               (ra ra3)
@@ -282,6 +293,9 @@
               ((re-nullable? rc) #f)
               ((re-nullable? (build-concat rr rr c)) #t)
               ((re-nullable? rr) #t)
+              ((re-nullable? (build-repeat 0 1 rc c)) #t)
+              ((re-nullable? (build-repeat 1 2 rc c)) #f)
+              ((re-nullable? (build-repeat 1 2 (build-or (list e r1) c) c)) #t)
               ((re-nullable? ro) #t)
               ((re-nullable? (build-or `(,r1 ,r2) c)) #f)
               ((re-nullable? (build-and `(,r1 ,e) c)) #f)
@@ -293,16 +307,17 @@
                (isc is:integer-set-contents)
                (r1 (->re #\1 c))
                (r2 (->re #\2 c))
-               (r3-5 (->re '(- #\3 #\5) c))
+               (r3-5 (->re '(char-range #\3 #\5) c))
                (r4 (build-or `(,r1 ,r2) c))
-               (r5 (->re `(: ,r3-5 #\7) c))
+               (r5 (->re `(union ,r3-5 #\7) c))
                (r6 (->re #\6 c)))
               ((flatten-res null orR? orR-res is:union c) null)
               ((isc (char-setR-chars (car (flatten-res `(,r1) orR? orR-res is:union c))))
                (isc (is:make-range (char->integer #\1))))
               ((isc (char-setR-chars (car (flatten-res `(,r4) orR? orR-res is:union c))))
                (isc (is:make-range (char->integer #\1) (char->integer #\2))))
-              ((isc (char-setR-chars (car (flatten-res `(,r6 ,r5 ,r4 ,r3-5 ,r2 ,r1) orR? orR-res is:union c))))
+              ((isc (char-setR-chars (car (flatten-res `(,r6 ,r5 ,r4 ,r3-5 ,r2 ,r1)
+                                                       orR? orR-res is:union c))))
                (isc (is:make-range (char->integer #\1) (char->integer #\7))))
               ((flatten-res `(,r1 ,r2) andR? andR-res (lambda (x y)
                                                         (let-values (((i _ __)
@@ -315,53 +330,58 @@
   (test-block ((c (make-cache))
                (isc is:integer-set-contents)
                (r (->re #\a c))
-               (rr (->re `(@ ,r ,r) c))
-               (rrr (->re `(@ ,r ,rr) c))
-               (rrr* (->re `(* ,rrr) c)))
+               (rr (->re `(concatenation ,r ,r) c))
+               (rrr (->re `(concatenation ,r ,rr) c))
+               (rrr* (->re `(repeat 0 +inf.0 ,rrr) c)))
               ((isc (char-setR-chars r)) (isc (is:make-range (char->integer #\a))))
               ((->re "" c) e)
-              ((->re "asdf" c) (->re `(@ #\a #\s #\d #\f) c))
+              ((->re "asdf" c) (->re `(concatenation #\a #\s #\d #\f) c))
               ((->re r c) r)
-              ((->re `(epsilon) c) e)
-              ((->re `(* ,r) c) (build-repeat r c))
-              ((->re `(+ ,r) c) (build-concat r (build-repeat r c) c))
-              ((->re `(? ,r) c) (build-or (list e r) c))
-              ((->re `(? ,rrr*) c) rrr*)
-              ((->re `(: (: (- #\a #\c) (^ (- #\000 #\110) (- #\112 #\377)))
-                         (: (* #\2))) c)
+              ((->re `(repeat 0 +inf.0 ,r) c) (build-repeat 0 +inf.0 r c))
+              ((->re `(repeat 1 +inf.0 ,r) c) (build-repeat 1 +inf.0 r c))
+              ((->re `(repeat 0 1 ,r) c) (build-repeat 0 1 r c))
+              ((->re `(repeat 0 1 ,rrr*) c) rrr*)
+              ((->re `(union (union (char-range #\a #\c)
+                                    (char-complement (char-range #\000 #\110)
+                                                     (char-range #\112 ,(integer->char max-char-num))))
+                         (union (repeat 0 +inf.0 #\2))) c)
                (build-or (list (build-char-set (is:union (is:make-range 73)
                                                          (is:make-range 97 99))
                                                c)
-                               (build-repeat (build-char-set (is:make-range 50) c) c))
+                               (build-repeat 0 +inf.0 (build-char-set (is:make-range 50) c) c))
                          c))
-              ((->re `(: ,rr ,rrr) c) (build-or (list rr rrr) c))
-              ((->re `(: ,r) c) r)
-              ((->re `(:) c) z)
-              ((->re `(& (& #\111 (^ (- #\000 #\110) (- #\112 #\377)))
-                         (& (* #\2))) c)
+              ((->re `(union ,rr ,rrr) c) (build-or (list rr rrr) c))
+              ((->re `(union ,r) c) r)
+              ((->re `(union) c) z)
+              ((->re `(intersection (intersection #\111 
+                                                  (char-complement (char-range #\000 #\110)
+                                                                   (char-range #\112 ,(integer->char max-char-num))))
+                         (intersection (repeat 0 +inf.0 #\2))) c)
                (build-and (list (build-char-set (is:make-range 73) c)
-                                (build-repeat (build-char-set (is:make-range 50) c) c))
+                                (build-repeat 0 +inf.0 (build-char-set (is:make-range 50) c) c))
                           c))
-              ((->re `(& (& #\000 (^ (- #\000 #\110) (- #\112 #\377)))
-                         (& (* #\2))) c)
+              ((->re `(intersection (intersection #\000 (char-complement (char-range #\000 #\110)
+                                                                         (char-range #\112 ,(integer->char max-char-num))))
+                                    (intersection (repeat 0 +inf.0 #\2))) c)
                z)
-              ((->re `(& ,rr ,rrr) c) (build-and (list rr rrr) c))
-              ((->re `(& ,r) c) r)
-              ((->re `(&) c) (build-neg z c))
-              ((->re `(~ ,r) c) (build-neg r c))
-              ((->re `(@) c) e)
-              ((->re `(@ ,rrr*) c) rrr*)
+              ((->re `(intersection ,rr ,rrr) c) (build-and (list rr rrr) c))
+              ((->re `(intersection ,r) c) r)
+              ((->re `(intersection) c) (build-neg z c))
+              ((->re `(complement ,r) c) (build-neg r c))
+              ((->re `(concatenation) c) e)
+              ((->re `(concatenation ,rrr*) c) rrr*)
               (rr (build-concat r r c))
-              ((->re `(@ ,r ,rr ,rrr) c)
+              ((->re `(concatenation ,r ,rr ,rrr) c)
                (build-concat r (build-concat rr rrr c) c))
-              ((isc (char-setR-chars (->re `(- #\1 #\1) c))) (isc (is:make-range 49)))
-              ((isc (char-setR-chars (->re `(- #\1 #\9) c))) (isc (is:make-range 49 57)))
-              ((isc (char-setR-chars (->re `(- "1" "1") c))) (isc (is:make-range 49)))
-              ((isc (char-setR-chars (->re `(- "1" "9") c))) (isc (is:make-range 49 57)))
-              ((->re `(- "9" "1") c) z)
-              ((isc (char-setR-chars (->re `(^) c)))
-               (isc (char-setR-chars (->re `(- #\000 #\377) c))))
-              ((isc (char-setR-chars (->re `(^ #\001 (- #\002 #\377)) c))) (isc (is:make-range 0)))
+              ((isc (char-setR-chars (->re `(char-range #\1 #\1) c))) (isc (is:make-range 49)))
+              ((isc (char-setR-chars (->re `(char-range #\1 #\9) c))) (isc (is:make-range 49 57)))
+              ((isc (char-setR-chars (->re `(char-range "1" "1") c))) (isc (is:make-range 49)))
+              ((isc (char-setR-chars (->re `(char-range "1" "9") c))) (isc (is:make-range 49 57)))
+              ((->re `(char-range "9" "1") c) z)
+              ((isc (char-setR-chars (->re `(char-complement) c)))
+               (isc (char-setR-chars (->re `(char-range #\000 ,(integer->char max-char-num)) c))))
+              ((isc (char-setR-chars (->re `(char-complement #\001 (char-range #\002 ,(integer->char max-char-num))) c)))
+               (isc (is:make-range 0)))
               )
   
   )

@@ -33,6 +33,7 @@
                                      n
                                      (string->symbol 
                                       (format "token-~a" (syntax-object->datum n))) 
+                                     n
                                      n)
                                    ,@(if empty? '() '(x)))
                             (make-token ',n ,(if empty? #f 'x))))
