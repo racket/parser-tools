@@ -99,6 +99,8 @@
                (raise-syntax-error #f "missing grammar declaration" stx))
            (if (not end)
                (raise-syntax-error #f "missing end declaration" stx))
+	   (if (not start)
+               (raise-syntax-error #f "missing start declaration" stx))
            (build-parser (if debug debug "")
                          error
                          tokens
