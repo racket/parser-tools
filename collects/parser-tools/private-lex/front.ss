@@ -170,8 +170,10 @@
                      (vector->list x))))
                 (vector->list table))
                (length (hash-table-map ht cons)))))
-        (printf "size: ~aKB~n" (/ (* 4.0 (+ 2 num-states (* 2 num-vectors) num-entries
-                                          (* 5 num-different-entries))) 1024)))
+        (printf "~a states, ~aKB~n"
+                num-states
+                (/ (* 4.0 (+ 2 num-states (* 2 num-vectors) num-entries
+                             (* 5 num-different-entries))) 1024)))
       (values table (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa)
               (unbox disappeared-uses))))
   )
