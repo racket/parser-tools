@@ -26,12 +26,12 @@
   (define-struct prec (num assoc) (make-inspector))
   
   (provide/contract
-   (make-item (prod? (union false? natural-number?) . -> . item?))
-   (make-term (symbol? (union false? natural-number?) (union prec? false?) . -> . term?))
-   (make-non-term (symbol? (union false? natural-number?) . -> . non-term?))
-   (make-prec (natural-number? (symbols 'left 'right 'nonassoc) . -> . prec?))
+   (make-item (prod? (union false/c natural-number/c) . -> . item?))
+   (make-term (symbol? (union false/c natural-number/c) (union prec? false/c) . -> . term?))
+   (make-non-term (symbol? (union false/c natural-number/c) . -> . non-term?))
+   (make-prec (natural-number/c (symbols 'left 'right 'nonassoc) . -> . prec?))
    (make-prod (non-term? (vectorof (union non-term? term?))
-               (union false? natural-number?) (union false? prec?) syntax? . -> . prod?)))
+               (union false/c natural-number/c) (union false/c prec?) syntax? . -> . prod?)))
   
   (provide 
      

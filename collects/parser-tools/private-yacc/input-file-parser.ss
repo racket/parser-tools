@@ -13,7 +13,7 @@
 
   (provide/contract 
    (parse-input ((listof identifier?) (listof identifier?) (listof identifier?)
-                 (union false? syntax?) syntax? any? . -> . (is-a?/c grammar%)))
+                 (union false/c syntax?) syntax? any/c . -> . (is-a?/c grammar%)))
    (get-term-list ((listof identifier?) . -> . (listof identifier?))))
 
   (define stx-for-original-property (read-syntax #f (open-input-string "original")))

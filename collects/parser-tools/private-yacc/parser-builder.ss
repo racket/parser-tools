@@ -8,12 +8,12 @@
   (require-for-template mzscheme)
   
   (provide/contract
-   (build-parser ((string? any? any? (listof identifier?) (listof identifier?)
-                  (listof identifier?) (union syntax? false?) syntax?) . ->* .
-                 (any? any? any? any?))))
+   (build-parser ((string? any/c any/c (listof identifier?) (listof identifier?)
+                  (listof identifier?) (union syntax? false/c) syntax?) . ->* .
+                 (any/c any/c any/c any/c))))
   
   ;; fix-check-syntax : (listof identifier?) (listof identifier?) (listof identifier?)
-  ;;                    (union syntax? false?) syntax?) -> syntax?
+  ;;                    (union syntax? false/c) syntax?) -> syntax?
   (define (fix-check-syntax input-terms start ends assocs prods)
     (let* ((term-binders (get-term-list input-terms))
            (get-term-binder
