@@ -3,8 +3,10 @@
 
   (provide digraph)
 
+  (define (zero-thunk) 0)
+  
   ;; digraph: 
-  ;;   ('a list) * ('a -> 'a list) * ('a -> 'b) * ('b * 'b -> 'b) * 'b 
+  ;;   ('a list) * ('a -> 'a list) * ('a -> 'b) * ('b * 'b -> 'b) * (-> 'b)
   ;;     -> ('a -> 'b)
   ;; DeRemer and Pennello 1982
   ;; Computes (f x) = (f- x) union Union{(f y) | y in (edges x)}
@@ -14,18 +16,33 @@
     (letrec (
 	     ;; Will map elements of 'a to 'b sets
 	     (results (make-hash-table 'equal))
-	     (f (lambda (x) (hash-table-get results x (lambda () fail))))
+	     (f (lambda (x) (hash-table-get results x fail)))
 	     
 	     ;; Maps elements of 'a to integers.
 	     (N (make-hash-table 'equal))
-	     (get-N (lambda (x) (hash-table-get N x (lambda () 0))))
+	     (get-N (lambda (x) (hash-table-get N x zero-thunk)))
 	     (set-N (lambda (x d) (hash-table-put! N x d)))
 
-	     (stack null)
-	     (push (lambda (x) (set! stack (cons x stack))))
-	     (pop (lambda () (begin0 (car stack) (set! stack (cdr stack)))))
-       	     (depth (lambda () (length stack)))
-
+;	     (stack null)
+;	     (push (lambda (x)
+;                     (set! stack (cons x stack))))
+;	     (pop (lambda () 
+;                    (begin0 
+;                      (car stack)
+;                      (set! stack (cdr stack)))))
+;       	     (depth (lambda () (length stack)))
+             (stack (make-vector 1000 #f))
+             (stack-pointer 0)
+             (push (lambda (x)
+                     (vector-set! stack stack-pointer x)
+                     (set! stack-pointer (add1 stack-pointer))))
+             (pop (lambda ()
+                    (set! stack-pointer (sub1 stack-pointer))
+                    (vector-ref stack stack-pointer)))
+             (depth (lambda () stack-pointer))
+             
+             
+             
 	     ;; traverse: 'a -> 
 	     (traverse
 	      (lambda (x)

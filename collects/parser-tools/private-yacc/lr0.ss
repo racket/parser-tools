@@ -8,7 +8,7 @@
 	   (lib "list.ss"))
   
   (provide union build-lr0-automaton run-automaton (struct trans-key (st gs))
-	   lr0-transitions lr0-states lr0-epsilon-trans
+	   get-mapped-lr0-non-term-keys lr0-states lr0-epsilon-trans
 	   kernel-items kernel-index for-each-state)
 
   (define (union comp<?)
@@ -34,8 +34,9 @@
   ;; trans-key = (make-trans-key kernel gram-sym)
   (define-struct kernel (items index) (make-inspector))
   (define-struct trans-key (st gs) (make-inspector))
-  (define-struct lr0 (transitions states epsilon-trans) (make-inspector))
+  (define-struct lr0 (term-transitions non-term-transitions states epsilon-trans) (make-inspector))
 
+  
   ;; Iteration over the states in an automaton
   (define (for-each-state f a)
     (let* ((states (lr0-states a))
@@ -54,13 +55,27 @@
 			(kernel-items k)) 
 	     "}")))
 
+  (define (false-thunk) #f)
   ;; run-automaton: kernel * gram-sym * LR0-automaton -> kernel | #f
   ;; returns the state that the transition trans-key provides or #f
   ;; if there is no such state
   (define (run-automaton k s a)
-    (hash-table-get (lr0-transitions a) (make-trans-key k s) (lambda () #f)))
+    (if (term? s)
+        (hash-table-get (lr0-term-transitions a) (make-trans-key k s) false-thunk)
+        (hash-table-get (lr0-non-term-transitions a) (make-trans-key k s) false-thunk)))
 
-
+  (define (get-mapped-lr0-non-term-keys a)
+    (hash-table-map (lr0-non-term-transitions a) (lambda (k v) k)))
+  
+  (define (add-lr0-transition! ttable nttable key value)
+    (hash-table-put!
+     (if (term? (trans-key-gs key))
+         ttable
+         nttable)
+     key
+     value))
+  
+  
   ;; build-LR0-automaton: grammar -> LR0-automaton
   ;; Constructs the kernels of the sets of LR(0) items of g
   (define (build-lr0-automaton grammar)
@@ -87,7 +102,7 @@
 				      (get-nt-prods grammar nt))))
 		       (lambda (nt) (list nt))
 		       (union non-term<?)
-		       null))
+		       (lambda () null)))
 
 	     ;; closure: LR1-item list -> LR1-item list
 	     ;; Creates a set of items containing i s.t. if A -> n.Xm is in it,
@@ -116,7 +131,8 @@
 
 
 	     ;; maps trans-keys to kernels
-	     (automaton (make-hash-table 'equal))
+	     (automaton-term (make-hash-table 'equal))
+             (automaton-non-term (make-hash-table 'equal))
 	     
 	     ;; keeps the kernels we have seen, so we can have a unique
 	     ;; list for each kernel
@@ -200,9 +216,9 @@
 								  new-kernel
 								  k)
 						 k)))))
-			(hash-table-put! automaton
-					 (make-trans-key kernel gs)
-					 unique-kernel)
+			(add-lr0-transition! automaton-term automaton-non-term
+                                             (make-trans-key kernel gs)
+                                             unique-kernel)
 ; 			(printf "~a -> ~a on ~a~n" 
 ; 				(kernel->string kernel)
 ; 				(kernel->string unique-kernel)
@@ -239,7 +255,7 @@
 		 (seen-kernels null))
 	(cond
 	 ((and (empty-queue? new-kernels) (null? old-kernels))
-	  (make-lr0 automaton (list->vector (reverse! seen-kernels)) epsilons))
+	  (make-lr0 automaton-term automaton-non-term (list->vector (reverse! seen-kernels)) epsilons))
 	 ((null? old-kernels)
 	  (loop (deq! new-kernels) seen-kernels))
 	 (else 

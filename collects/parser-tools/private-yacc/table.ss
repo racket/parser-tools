@@ -12,6 +12,19 @@
 
   (provide build-table)
 
+  
+  (define (bit-vector-for-each f bv)
+    (letrec ((for-each
+              (lambda (bv number)
+                (cond
+                  ((= 0 bv) (void))
+                  ((= 1 (bitwise-and 1 bv))
+                   (f number)
+                   (for-each (arithmetic-shift bv -1) (add1 number)))
+                  (else (for-each (arithmetic-shift bv -1) (add1 number)))))))
+      (for-each bv 0)))
+                   
+  
   ;; print-entry: symbol * action * output-port ->
   ;; prints the action a for lookahead sym to port
   (define (print-entry sym a port)
@@ -204,7 +217,7 @@
   ;; term/non-term index (with the non-terms coming first)
   ;; buile-table: grammar * string -> action2d-array
   (define (build-table g file suppress)
-    (let* ((a (build-lr0-automaton g))
+    (let* ((a (time (build-lr0-automaton g)))
 	   (terms (grammar-terms g))
 	   (non-terms (grammar-non-terms g))
 	   (get-term (list->vector terms))
@@ -229,7 +242,6 @@
 		 (else (if (not (equal? a old))
 			   (array2d-set! v i1 i2 (list a old))))))))
 	   (get-lookahead (compute-LA a g)))
-
       (for-each-state
        (lambda (state)
          (let loop ((i 0))
@@ -256,11 +268,11 @@
 
          (for-each
           (lambda (item)
-            (for-each 
-             (lambda (t)
+            (bit-vector-for-each 
+             (lambda (term-index)
                (array2d-add! table 
                              (kernel-index state)
-                             (+ num-non-terms (gram-sym-index t))
+                             (+ num-non-terms term-index)
                              (cond
                                ((not (start-item? item))
                                 (make-reduce

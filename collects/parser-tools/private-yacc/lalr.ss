@@ -11,20 +11,17 @@
 
   (provide compute-LA)
 
-  (define (array2d-add! a i1 i2 v)
-    (let ((old (array2d-ref a i1 i2)))
-      (array2d-set! a i1 i2 (cons v old))))
-  
   ;; compute-DR: LR0-automaton * grammar -> (trans-key -> term list)
   ;; computes for each state, non-term transition pair, the terminals
   ;; which can transition out of the resulting state
   (define (compute-DR a g)
     (lambda (tk)
       (let ((r (run-automaton (trans-key-st tk) (trans-key-gs tk) a)))
-	(filter
-	 (lambda (term)
-	   (run-automaton r term a))
-	 (grammar-terms g)))))
+        (term-list->bit-vector
+         (filter
+          (lambda (term)
+            (run-automaton r term a))
+          (grammar-terms g))))))
   
   ;; compute-reads: 
   ;;   LR0-automaton * grammar -> (trans-key -> trans-key list)
@@ -41,12 +38,11 @@
   (define (compute-read a g)
     (let* ((dr (compute-DR a g))
 	   (reads (compute-reads a g)))
-      (digraph (filter (lambda (x) (non-term? (trans-key-gs x)))
-		       (hash-table-map (lr0-transitions a) (lambda (k v) k)))
+      (digraph (get-mapped-lr0-non-term-keys a)
 	       reads
 	       dr
-	       (union term<?)
-	       null)))
+	       bitwise-ior
+	       (lambda () 0))))
 
   
   ;; comput-includes-and-lookback: 
@@ -60,7 +56,6 @@
 	   (lookback (make-array2d num-states
 				   (grammar-num-prods g)
 				   null)))
-
       (for-each-state
        (lambda (state)
          (for-each
@@ -70,26 +65,21 @@
                (let loop ((i (make-item prod 0))
                           (p state))
                  (if (and p i)
-                     (begin
-                       (if (and (non-term? (sym-at-dot i))
-                                (nullable-after-dot? (move-dot-right i)
-                                                     g))
+                     (let ((new-i (move-dot-right i))
+                           (next-sym (sym-at-dot i)))
+                       (if (and (non-term? next-sym)
+                                (nullable-after-dot? new-i g))
                            (array2d-add! includes
                                          (kernel-index p)
-                                         (gram-sym-index 
-                                          (sym-at-dot i))
-                                         (make-trans-key
-                                          state
-                                          non-term)))
-                       (if (not (move-dot-right i))
+                                         (gram-sym-index next-sym)
+                                         (make-trans-key state non-term)))
+                       (if (not new-i)
                            (array2d-add! lookback
                                          (kernel-index p)
                                          (prod-index prod)
-                                         (make-trans-key
-                                          state
-                                          non-term)))
-                       (loop (move-dot-right i)
-                             (run-automaton p (sym-at-dot i) a))))))
+                                         (make-trans-key state non-term)))
+                       (loop new-i
+                             (run-automaton p next-sym a))))))
              (get-nt-prods g non-term)))
           non-terms))
        a)
@@ -106,21 +96,20 @@
   ;; compute-follow:  LR0-automaton * grammar -> (trans-key -> term list)
   (define (compute-follow a g includes)
     (let ((read (compute-read a g)))
-      (digraph (filter (lambda (x) (non-term? (trans-key-gs x)))
-		       (hash-table-map (lr0-transitions a) (lambda (k v) k)))
+      (digraph (get-mapped-lr0-non-term-keys a)
 	       includes
 	       read
-	       (union term<?)
-	       null)))
+	       bitwise-ior
+	       (lambda () 0))))
 
   ;; compute-LA: LR0-automaton * grammar -> (kernel * prod -> term list)
   (define (compute-LA a g)
-    (let-values (((includes lookback) (compute-includes-and-lookback a g)))
-      (let ((follow (compute-follow a g includes)))
+    (let-values (((includes lookback) (time (compute-includes-and-lookback a g))))
+      (let ((follow (time (compute-follow a g includes))))
 	(lambda (k p)
 	  (let* ((l (lookback k p))
-		 (f (map follow l)))
-	    (apply append f))))))
+                 (f (map follow l)))
+	    (apply bitwise-ior (cons 0 f)))))))
 
 
   (define (print-DR dr a g)

@@ -19,7 +19,8 @@
 
    ;; Things that operate on grammar symbols
    gram-sym-symbol gram-sym-index term-prec gram-sym->string
-   non-term? term? nullable? non-term<? term<? 
+   non-term? term? nullable? non-term<? term<?
+   term-list->bit-vector
    
    ;; Things that work on precs
    prec-num prec-assoc
@@ -142,6 +143,12 @@
   (define (gram-sym->string gs)
     (symbol->string (gram-sym-symbol gs)))
 
+  (define (term-list->bit-vector terms)
+    (cond
+      ((null? terms) 0)
+      (else 
+       (bitwise-ior (arithmetic-shift 1 (term-index (car terms))) (term-list->bit-vector (cdr terms))))))
+  
   ;; ------------------------- Precedences ---------------------------
   
   ;; a precedence declaration.  the sym should be 'left 'right or 'nonassoc

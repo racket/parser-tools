@@ -41,7 +41,7 @@
   
   (define (build-parser filename src-pos suppress input-terms start end assocs prods runtime)
     (let* ((grammar (parse-input start end input-terms assocs prods runtime src-pos))
-           (table (build-table grammar filename suppress))
+	   (table (build-table grammar filename suppress))
            (table-code 
             `((lambda (table-list)
                 (let ((v (list->vector table-list)))
