@@ -8,8 +8,8 @@
   
   (provide build-parser)
   
-  (define (build-parser filename suppress error-expr input-terms start end assocs prods runtime src)
-    (let* ((grammar (parse-input start end input-terms assocs prods runtime))
+  (define (build-parser filename src-pos suppress error-expr input-terms start end assocs prods runtime src)
+    (let* ((grammar (parse-input start end input-terms assocs prods runtime src-pos))
            (table (build-table grammar filename suppress))
            (table-code 
             `((lambda (table-list)
@@ -67,7 +67,9 @@
                       (reduce-stack
                        (lambda (s n v)
                          (if (> n 0)
-                             (reduce-stack (cddr s) (sub1 n) (cons (cadr s) v))
+                             ,(if src-pos
+                                  `(reduce-stack (cddr s) (sub1 n) `(,(cadr s) ,(caddr s) ,(cadddr s) ,@v))
+                                  `(reduce-stack (cddr s) (sub1 n) (cons (cadr s) v)))
                              (values s v))))
                       (fix-error
                        (lambda (stack ip get-token)
@@ -119,18 +121,22 @@
                (lambda (get-token)
                  (let parsing-loop ((stack (list 0))
 				    (ip (get-token)))
+                                             
                    ;;(display stack)
                    ;;(newline)
                    ;;(display (if (token? ip) (token-name ip) ip))
                    ;;(newline)
-                   (let ((action (find-action stack ip)))
+                   (let* ((tok ,(if src-pos `(car ip) `ip))
+                          (action (find-action stack tok)))
                      (cond
                        ((shift? action)
                         ;; (printf "shift:~a~n" (shift-state action))
-                        (let ((val (if (token? ip)
-                                       (token-value ip)
+                        (let ((val (if (token? tok)
+                                       (token-value tok)
                                        #f)))
-                          (parsing-loop (cons (shift-state action) (cons val stack))
+                          (parsing-loop ,(if src-pos
+                                             ``(,(shift-state action) ,val ,(cadr ip) ,(caddr ip) ,@stack)
+                                             ``(,(shift-state action) ,val ,@stack))
                                         (get-token))))
                        ((reduce? action)
                         ;; (printf "reduce:~a~n" (reduce-prod-num action))
@@ -152,7 +158,7 @@
                         (cadr stack))
                        (else 
                         (err ip)
-                        (let ((new-stack (fix-error stack ip get-token)))
+                        (let ((new-stack (fix-error stack tok get-token)))
                           (if new-stack
                               (parsing-loop new-stack (get-token))
                               (void)))))))))))

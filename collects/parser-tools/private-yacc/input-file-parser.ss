@@ -9,12 +9,18 @@
   (provide parse-input)
 
   ;; get-args: num * syntax-object -> syntax-object list
-  (define (get-args x act)
+  (define (get-args x act src-pos)
     (let loop ((i 1))
       (cond
         ((> i x) null)
-        (else (cons (datum->syntax-object act (string->symbol (format "$~a" i)))
-                    (loop (add1 i)))))))
+        (else 
+         (if src-pos
+             `(,(datum->syntax-object act (string->symbol (format "$~a" i)))
+               ,(datum->syntax-object act (string->symbol (format "$~a-start-pos" i)))
+               ,(datum->syntax-object act (string->symbol (format "$~a-end-pos" i)))
+               ,@(loop (add1 i)))
+             `(,(datum->syntax-object act (string->symbol (format "$~a" i)))
+               ,@(loop (add1 i))))))))
     
   ;; nullable: production list * int -> non-term set
   ;; determines which non-terminals can derive epsilon
@@ -111,8 +117,8 @@
          "undefined token group"
          term-syn)))))
   
-  ;; parse-input: syntax-object * syntax-object list * syntax-object^4 -> grammar
-  (define (parse-input start ends term-defs prec-decls prods runtime)
+  ;; parse-input: syntax-object * syntax-object list * syntax-object^4 * boolean-> grammar
+  (define (parse-input start ends term-defs prec-decls prods runtime src-pos)
     (let* ((counter 0)
            
            (start-sym (syntax-object->datum start))
@@ -285,7 +291,7 @@
               (lambda (prod act)
                 (datum->syntax-object
                  runtime
-                 `(lambda ,(get-args (vector-length prod) act)
+                 `(lambda ,(get-args (vector-length prod) act src-pos)
                     ,act)
                  act)))
              
