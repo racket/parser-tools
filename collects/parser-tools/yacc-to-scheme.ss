@@ -45,7 +45,9 @@
   (define (parse-grammar enter-term enter-empty-term enter-non-term)
     (parser
      (tokens x y)
-     (error error)
+     (error (lambda (tok-ok tok-name tok-value)
+	      (error "Error parsing yacc grammar at token: tok-name with value: tok-value" 'parse-grammar)))
+	       
      (end |%%|)
      (start gram)
      (grammar
