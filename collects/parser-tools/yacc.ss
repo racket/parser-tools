@@ -151,11 +151,13 @@
   (define-struct stack-frame (state value start-pos end-pos))
  
   (define empty-stack (list (make-stack-frame 0 #f #f #f)))
-    
+
+  (define (false-thunk) #f) 
+
   (define (parser-body err ends table term-sym->index actions src-pos)
     (letrec ((input->token
-              (lambda (ip)
-                (if src-pos
+              (if src-pos
+                  (lambda (ip)
                     (cond
                       ((and (list? ip) (= 3 (length ip)))
                        (let ((tok (car ip)))
@@ -170,7 +172,8 @@
                        (raise-type-error 'parser 
                                          "(list (token or symbol) position position)"
                                          0
-                                         ip)))
+                                         ip))))
+                  (lambda (ip)
                     (cond
                       ((symbol? ip) (make-token ip #f))
                       ((token? ip) ip)
@@ -203,7 +206,7 @@
                                      (remove-input)))))))
                          (remove-states
                           (lambda ()
-                            (let ((a (find-action stack (make-token 'error #f) #f)))
+                            (let ((a (find-action stack (make-token 'error #f) ip)))
                               (cond
                                 ((shift? a)
                                  ;; (printf "shift:~a~n" (shift-state a))
@@ -232,16 +235,19 @@
              
              (find-action
               (lambda (stack tok ip)
-                (array2d-ref table 
-                             (stack-frame-state (car stack))
-                             (hash-table-get term-sym->index
-                                             (token-name tok)
-                                             (lambda ()
-                                               (if src-pos
-                                                   (err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
-                                                   (err #t (token-name tok) (token-value tok)))
-                                               (raise-read-error (format "parser: got token of unknown type ~a" (token-name tok))
-                                                                 #f #f #f #f #f)))))))
+                (let ((token-index (hash-table-get term-sym->index
+                                                   (token-name tok)
+                                                   false-thunk)))
+                  (if token-index
+                      (array2d-ref table 
+                                   (stack-frame-state (car stack))
+                                   token-index)
+                      (begin
+                        (if src-pos
+                            (err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
+                            (err #t (token-name tok) (token-value tok)))
+                        (raise-read-error (format "parser: got token of unknown type ~a" (token-name tok))
+                                          #f #f #f #f #f)))))))
       (lambda (get-token)
         (let parsing-loop ((stack empty-stack)
                            (ip (get-token)))
