@@ -21,20 +21,20 @@
 
      ["#t" (token-DATUM #t)]
      ["#f" (token-DATUM #f)]
-     [(@ "#\\" (any)) (token-DATUM (caddr (string->list (get-lexeme))))]
+     [(@ "#\\" (any)) (token-DATUM (caddr (string->list lexeme)))]
      ["#\\space" (token-DATUM #\space)]
      ["#\\newline" (token-DATUM #\newline)]
-     [(: (@ (initial) (* (subsequent))) + - "...") (token-DATUM (string->symbol (get-lexeme)))]
+     [(: (@ (initial) (* (subsequent))) + - "...") (token-DATUM (string->symbol lexeme))]
      [#\" (token-DATUM (list->string (get-string-token input-port)))]
      [#\( 'OP]
      [#\) 'CP]
      [#\[ 'OP]
      [#\] 'CP]
      ["#(" 'HASHOP]
-     [(num2) (token-DATUM (string->number (get-lexeme) 2))]
-     [(num8) (token-DATUM (string->number (get-lexeme) 8))]
-     [(num10) (token-DATUM (string->number (get-lexeme) 10))]
-     [(num16) (token-DATUM (string->number (get-lexeme) 16))]
+     [(num2) (token-DATUM (string->number lexeme 2))]
+     [(num8) (token-DATUM (string->number lexeme 8))]
+     [(num10) (token-DATUM (string->number lexeme 10))]
+     [(num16) (token-DATUM (string->number lexeme 16))]
      ["'" 'QUOTE]
      ["`" 'QUASIQUOTE]
      ["," 'UNQUOTE]
@@ -44,7 +44,7 @@
    
   (define get-string-token
     (lexer
-     [(^ #\" #\\) (cons (car (string->list (get-lexeme)))
+     [(^ #\" #\\) (cons (car (string->list lexeme))
 			(get-string-token input-port))]
      [(@ #\\ #\\) (cons #\\ (get-string-token input-port))]
      [(@ #\\ #\") (cons #\" (get-string-token input-port))]
@@ -232,14 +232,13 @@
       (sexp-list [() null]
                  [(sexp-list sexp) (cons $2 $1)]))))
   
-  (define (rs sn ip off)
+  (define (rs sn ip)
     (port-count-lines! ip)
     ((scheme-parser sn) (lambda () (scheme-lexer ip))))
   
   (define readsyntax
-    (case-lambda ((sn) (rs sn (current-input-port) (list 0 0 0)))
-                 ((sn ip) (rs sn ip (list 0 0 0)))
-		 ((sn ip off) (rs sn ip off))))
+    (case-lambda ((sn) (rs sn (current-input-port)))
+                 ((sn ip) (rs sn ip))))
 
   (provide (rename readsyntax read-syntax))
                         

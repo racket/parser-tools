@@ -34,17 +34,17 @@
    [(: #\tab #\space) (calcl input-port)]
    ;; The parser will treat the return of 'newline the same as (token-newline)
    [#\newline 'newline]
-   [(: = + - * / ^) (string->symbol (get-lexeme))]
+   [(: = + - * / ^) (string->symbol lexeme)]
    ["(" 'OP]
    [")" 'CP]
    [sin (token-FNCT sin)]
    ;; It the parens are left off of an "invocation" of an abbreviation, it means the
    ;; character sequence instead.
-   [(+ (: (lower-letter) (upper-letter))) (token-VAR (string->symbol (get-lexeme)))]
-   [(+ (digit)) (token-NUM (string->number (get-lexeme)))]
+   [(+ (: (lower-letter) (upper-letter))) (token-VAR (string->symbol lexeme))]
+   [(+ (digit)) (token-NUM (string->number lexeme))]
    ;; Strings which dr/mzscheme does not think of as symbols (such as . or ,) must be
    ;; entered as a string or character.  "." would also be ok.
-   [(@ (+ (digit)) #\. (* (digit))) (token-NUM (string->number (get-lexeme)))]))
+   [(@ (+ (digit)) #\. (* (digit))) (token-NUM (string->number lexeme))]))
    
 
 (define calcp

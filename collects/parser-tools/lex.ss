@@ -11,10 +11,10 @@
 	   (lib "cffi.ss" "compiler"))
 
   (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs
-	   get-position position-offset position-line position-col position?
+	   position-offset position-line position-col position?
            define-tokens define-empty-tokens)
   
-  (define-syntaxes (lexer-experiment lexer-src-pos-experiment)
+  (define-syntaxes (lexer-exp lexer-src-pos-exp)
     (let ((build-lexer
            (lambda (wrap?)
              (lambda (stx)
@@ -121,9 +121,9 @@
          0
          ip))
       (let ((first-pos (get-position ip)))
-        (let-values (((longest-match-length longest-match-action)
+        (let-values (((longest-match-length length longest-match-action)
                       (lexer ip peek-string)))
-          (do-match ip first-pos longest-match-length (vector-ref actions longest-match-action) wrap?)))))
+          (do-match ip first-pos longest-match-length length (vector-ref actions longest-match-action) wrap?)))))
   
   (define (lexer-body start-state trans-table eof-table actions no-lookahead wrap?)
     (lambda (ip)
@@ -158,12 +158,13 @@
                     (+ (char->integer (string-ref char 0)) (* 256 state)))))))
             (cond
               ((not next-state)
-               (do-match ip first-pos longest-match-length longest-match-action wrap?))
+               (do-match ip first-pos longest-match-length length longest-match-action wrap?))
               ((vector-ref no-lookahead next-state)
                (let ((act (vector-ref actions next-state)))
                  (do-match ip 
                            first-pos 
                            (if act length longest-match-length)
+			   length
                            (if act act longest-match-action)
                            wrap?)))
               (else
@@ -177,41 +178,46 @@
                              (if act
                                  length
                                  longest-match-length))))))))))
-  
-  (define (do-match lb first-pos longest-match-length longest-match-action wrap?)
-    (let* ((match (read-string longest-match-length lb))
-           (end-pos (get-position lb)))
-      (if (not longest-match-action)
-          (raise-read-error
-           (format "lexer: No match found in input starting with: ~a" match)
-           #f
-           (position-line first-pos)
-           (position-col first-pos)
-           (position-offset first-pos)
-           (- (position-offset end-pos) (position-offset first-pos))))
-      (cond
-        (wrap?
-         (let/ec ret
-           (list (longest-match-action
-                  (lambda () first-pos)
-                  (lambda () end-pos)
-                  (lambda () match)
-                  ret
-                  lb) 
-                 first-pos 
-                 end-pos)))
-        (else 
-         (longest-match-action
-          (lambda () first-pos)
-          (lambda () end-pos)
-          (lambda () match)
-          (lambda (x) x)
-          lb)))))
+
+  (define id (lambda (x) x))
+
+  (define (do-match lb first-pos longest-match-length length longest-match-action wrap?)
+    (if (not longest-match-action)
+	(let* ((match (read-string length lb))
+	       (end-pos (get-position lb)))
+	  (if (not longest-match-action)
+	      (raise-read-error
+	       (format "lexer: No match found in input starting with: ~a" match)
+	       #f
+	       (position-line first-pos)
+	       (position-col first-pos)
+	       (position-offset first-pos)
+	       (- (position-offset end-pos) (position-offset first-pos)))))
+	(let* ((match (read-string longest-match-length lb))
+	       (end-pos (get-position lb)))
+	  (cond
+	   (wrap?
+	    (let/ec ret
+	      (list (longest-match-action
+		     first-pos
+		     end-pos
+		     match
+		     ret
+		     lb) 
+		    first-pos 
+		    end-pos)))
+	   (else 
+	    (longest-match-action
+	     first-pos
+	     end-pos
+	     match
+	     id
+	     lb))))))
   
   
   (define-struct position (offset line col))
   (define (get-position ip)
     (let-values (((line col off) (port-next-location ip)))
-      (make-position off line col)))
+      (make-position (add1 off) (if line (add1 line) #f) (if col (add1 col) #f))))
 
 )
