@@ -37,7 +37,7 @@
      ((: ":") (string->symbol lexeme))
      (%prec (string->symbol lexeme))
      (#\| 'PIPE)
-     ((: #\newline #\tab " " (comment) (@ "{" (* (^ "}")) "}")) (without-src-pos (get-token-grammar input-port)))
+     ((: #\newline #\tab " " (comment) (@ "{" (* (^ "}")) "}")) (return-without-pos (get-token-grammar input-port)))
      (#\; 'SEMI)
      (#\' (token-STRING (string->symbol (list->string (match-single-string input-port)))))
      (#\" (token-STRING (string->symbol (list->string (match-double-string input-port)))))
