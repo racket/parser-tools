@@ -358,18 +358,18 @@
                                 (add1 (length non-terms)))))
           
           
-          (printf "nullable: {~a}~n~n"
-                  (apply string-append 
-                         (let loop ((i 0))
-                           (cond
-                             ((>= i (vector-length nulls)) null)
-                             ((vector-ref nulls i)
-                              (cons
-                               (format "~a" 
-                                       (gram-sym-symbol
-                                        (list-ref (cons start non-terms) i)))
-                               (loop (add1 i))))
-                             (else (loop (add1 i)))))))
+;          (printf "nullable: {~a}~n~n"
+;                  (apply string-append 
+;                         (let loop ((i 0))
+;                           (cond
+;                             ((>= i (vector-length nulls)) null)
+;                             ((vector-ref nulls i)
+;                              (cons
+;                               (format "~a" 
+;                                       (gram-sym-symbol
+;                                        (list-ref (cons start non-terms) i)))
+;                               (loop (add1 i))))
+;                             (else (loop (add1 i)))))))
           (make-grammar
            (list->vector prods)
            (apply append prods)
