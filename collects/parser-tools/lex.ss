@@ -111,7 +111,7 @@
 
   ;; make-lex-buf: input-port -> lex-buf
   (define (make-lex-buf ip)
-    (make-lex-buffer ip null null 0 0 0 null))
+    (make-lex-buffer ip null null 1 1 1 null))
 
   ;; next-char: lex-buf -> c
   ;; gets the next character from the buffer
