@@ -53,7 +53,7 @@
                                       (trans-table-stx trans)
                                       (no-lookahead-stx no-look)
                                       (actions-stx `(vector ,@(map (lambda (a)
-                                                                     (wrap-action a 'lexeme #'here a))
+                                                                     (if a (wrap-action a 'lexeme #'here a) #f))
                                                                    (vector->list actions))))
                                       (spec-act-stx
                                        (wrap-action spec-act 'special #'here spec-act))
