@@ -15,7 +15,7 @@
   ;; kernel = (make-kernel (LR1-item list) index)
   ;;   the list must be kept sorted according to item<? so that equal? can
   ;;   be used to compare kernels
-  ;;   Each kernel is assigned a uniqui index, 0 <= index < number of states
+  ;;   Each kernel is assigned a unique index, 0 <= index < number of states
   ;; trans-key = (make-trans-key kernel gram-sym)
   (define-struct kernel (items index) (make-inspector))
   (define-struct trans-key (st gs) (make-inspector))

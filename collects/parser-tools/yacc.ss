@@ -1,15 +1,33 @@
 (module yacc mzscheme
   
   (require-for-syntax "private-yacc/parser-builder.ss"
-                      "private-yacc/yacc-helper.ss")
-  (require "private-yacc/array2d.ss"
-           "private-lex/token.ss"
+                      "private-yacc/grammar.ss"
+                      "private-yacc/yacc-helper.ss"
+                      "private-yacc/parser-actions.ss")
+  (require "private-lex/token.ss"
            "private-yacc/parser-actions.ss"
            (lib "etc.ss")
            (lib "pretty.ss")
 	   (lib "readerr.ss" "syntax"))
   
   (provide parser)
+  
+    
+  ;; convert-parse-table : (vectorof (listof (cons/c gram-sym? action?))) ->
+  ;;                       (vectorof (symbol runtime-action hashtable))
+  (define-for-syntax (convert-parse-table table)
+    (list->vector
+     (map
+      (lambda (state-entry)
+        (let ((ht (make-hash-table)))
+          (for-each
+           (lambda (gs/action)
+             (hash-table-put! ht
+                              (gram-sym-symbol (car gs/action))
+                              (action->runtime-action (cdr gs/action))))
+           state-entry)
+          ht))
+      (vector->list table))))
   
   (define-syntax (parser stx)
     (syntax-case stx ()
@@ -141,7 +159,7 @@
            (raise-syntax-error #f "missing end declaration" stx))
          (unless start
            (raise-syntax-error #f "missing start declaration" stx))
-         (let-values (((table term-sym->index actions check-syntax-fix)
+         (let-values (((table all-term-syms actions check-syntax-fix)
                        (build-parser (if debug debug "")
                                      src-pos
                                      suppress
@@ -171,14 +189,14 @@
                          (ends end)
                          (starts start)
                          (debug debug)
-                         (table table)
-                         (term-sym->index term-sym->index)
+                         (table (convert-parse-table table))
+                         (all-term-syms all-term-syms)
                          (actions actions)
                          (src-pos src-pos))
              (syntax
               (begin
                 check-syntax-fix
-                (parser-body debug err (quote starts) (quote ends) table term-sym->index actions src-pos)))))))
+                (parser-body debug err (quote starts) (quote ends) table all-term-syms actions src-pos)))))))
       (_
        (raise-syntax-error #f
                            "parser must have the form (parser args ...)"
@@ -231,11 +249,12 @@
   
   (define (make-empty-stack i) (list (make-stack-frame i #f #f #f)))
   
-  ;; The table format is an array2d that maps each state/term pair to either
-  ;; an accept, shift or reduce structure - or a #f.  Except that we will encode
-  ;; by changing (make-accept) -> 'accept, (make-shift i) -> i and
-  ;; (make-reduce i1 i2 i3) -> #(i1 i2 i3)
-  (define (parser-body debug? err starts ends table term-sym->index actions src-pos)
+  
+  ;; The table is a vector that maps each state to a hash-table that maps a
+  ;; terminal symbol to either an accept, shift, reduce, or goto structure.
+  ;  We encode the structures according to the runtime-action data definition in
+  ;; parser-actions.ss
+  (define (parser-body debug? err starts ends table all-term-syms actions src-pos)
     (local ((define extract
               (if src-pos
                   extract-src-pos
@@ -249,9 +268,9 @@
                                               #f #f #f #f #f)
                             (let ((a (find-action stack tok val start-pos end-pos)))
                               (cond
-                                ((shift? a)
-                                 ;; (printf "shift:~a~n" (shift-state a))
-                                 (cons (make-stack-frame (shift-state a)
+                                ((runtime-shift? a)
+                                 ;; (printf "shift:~a~n" (runtime-shift-state a))
+                                 (cons (make-stack-frame (runtime-shift-state a)
                                                          val
                                                          start-pos
                                                          end-pos)
@@ -264,11 +283,11 @@
                 (let remove-states ()
                   (let ((a (find-action stack 'error #f start-pos end-pos)))
                     (cond
-                      ((shift? a)
-                       ;; (printf "shift:~a~n" (shift-state a))
+                      ((runtime-shift? a)
+                       ;; (printf "shift:~a~n" (runtime-shift-state a))
                        (set! stack 
                              (cons
-                              (make-stack-frame (shift-state a) 
+                              (make-stack-frame (runtime-shift-state a) 
                                                 #f 
                                                 start-pos
                                                 end-pos)
@@ -285,19 +304,18 @@
                           (remove-states)))))))))
             
             (define (find-action stack tok val start-pos end-pos)
-              (let ((token-index (hash-table-get term-sym->index
-                                                 tok
-                                                 (lambda () #f))))
-                (if token-index
-                    (array2d-ref table 
-                                 (stack-frame-state (car stack))
-                                 token-index)
-                    (begin
-                      (if src-pos
-                          (err #f tok val start-pos end-pos)
-                          (err #f tok val))
-                      (raise-read-error (format "parser: got token of unknown type ~a" tok)
-                                        #f #f #f #f #f)))))
+              (unless (hash-table-get all-term-syms
+                                      tok
+                                      (lambda () #f))
+                (if src-pos
+                    (err #f tok val start-pos end-pos)
+                    (err #f tok val))
+                (raise-read-error (format "parser: got token of unknown type ~a" tok)
+                                  #f #f #f #f #f))
+              (hash-table-get (vector-ref table (stack-frame-state (car stack)))
+                              tok
+                              (lambda () #f)))
+
             (define (make-parser start-number)
               (lambda (get-token)
                 (let parsing-loop ((stack (make-empty-stack start-number))
@@ -306,41 +324,44 @@
                                 (extract ip)))
                     (let ((action (find-action stack tok val start-pos end-pos)))
                       (cond
-                        ((shift? action)
-                         ;; (printf "shift:~a~n" (shift-state action))
-                         (parsing-loop (cons (make-stack-frame (shift-state action)
+                        ((runtime-shift? action)
+                         ;; (printf "shift:~a~n" (runtime-shift-state action))
+                         (parsing-loop (cons (make-stack-frame (runtime-shift-state action)
                                                                val
                                                                start-pos
                                                                end-pos)
                                              stack)
                                        (get-token)))
-                        ((reduce? action)
-                         ;; (printf "reduce:~a~n" (reduce-prod-num action))
+                        ((runtime-reduce? action)
+                         ;; (printf "reduce:~a~n" (runtime-reduce-prod-num action))
                          (let-values (((new-stack args)
                                        (reduce-stack stack 
-                                                     (reduce-rhs-length action)
+                                                     (runtime-reduce-rhs-length action)
                                                      null
                                                      src-pos)))
-                           (let* ((A (reduce-lhs-num action))
-                                  (goto (array2d-ref table (stack-frame-state (car new-stack)) A)))
+                           (let ((goto 
+                                  (runtime-goto-state
+                                   (hash-table-get 
+                                    (vector-ref table (stack-frame-state (car new-stack)))
+                                    (runtime-reduce-lhs action)))))
                              (parsing-loop 
                               (cons
                                (if src-pos
                                    (make-stack-frame
                                     goto 
-                                    (apply (vector-ref actions (reduce-prod-num action)) args)
+                                    (apply (vector-ref actions (runtime-reduce-prod-num action)) args)
                                     (if (null? args) start-pos (cadr args))
                                     (if (null? args) 
                                         end-pos
-                                        (list-ref args (- (* (reduce-rhs-length action) 3) 1))))
+                                        (list-ref args (- (* (runtime-reduce-rhs-length action) 3) 1))))
                                    (make-stack-frame
                                     goto 
-                                    (apply (vector-ref actions (reduce-prod-num action)) args)
+                                    (apply (vector-ref actions (runtime-reduce-prod-num action)) args)
                                     #f
                                     #f))
                                new-stack)
                               ip))))
-                        ((accept? action)
+                        ((runtime-accept? action)
                          ;; (printf "accept~n")
                          (stack-frame-value (car stack)))
                         (else 

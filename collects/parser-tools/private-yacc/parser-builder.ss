@@ -73,21 +73,15 @@
   (define (build-parser filename src-pos suppress input-terms start end assocs prods)
     (let* ((grammar (parse-input input-terms start end assocs prods src-pos))
            (table (build-table grammar filename suppress))
-           (num-non-terms (send grammar get-num-non-terms))
-           (token-code
-            `(let ((ht (make-hash-table)))
-               (begin
-                 ,@(map (lambda (term)
-                          `(hash-table-put! ht 
-                                            ',(gram-sym-symbol term)
-                                            ,(+ num-non-terms (gram-sym-index term))))
-                        (send grammar get-terms))
-                 ht)))
+           (all-tokens (make-hash-table))
            (actions-code
             `(vector ,@(map prod-action (send grammar get-prods)))))
-    (values table
-            token-code
-            actions-code
-            (fix-check-syntax input-terms start end assocs prods))))
+      (for-each (lambda (term)
+                  (hash-table-put! all-tokens (gram-sym-symbol term) #t))
+                (send grammar get-terms))
+      (values table
+              all-tokens
+              actions-code
+              (fix-check-syntax input-terms start end assocs prods))))
       
   )
