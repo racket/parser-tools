@@ -45,11 +45,11 @@
             `(letrec ((term-sym->index ,token-code)
                       (table ,table-code)
                       (actions ,actions-code)
-                      (pop-x
-                       (lambda (s n)
+                      (reduce-stack
+                       (lambda (s n v)
                          (if (> n 0)
-                             (pop-x (cdr s) (sub1 n))
-                             s))))
+                             (reduce-stack (cdr (cdr s)) (sub1 n) (cons (cadr s) v))
+                             (values s v)))))
                (lambda (get-token)
                  (let loop ((stack (list 0))
                             (ip (get-token)))
@@ -66,13 +66,26 @@
                      (cond
                        ((shift? action)
                         (printf "shift:~a~n" (shift-state action))
-                        (loop (cons (shift-state action) stack) (get-token)))
+                        (let ((val (if (token? ip)
+                                       (token-value ip)
+                                       #f)))
+                          (loop (cons (shift-state action) (cons val stack))
+                                (get-token))))
                        ((reduce? action)
                         (printf "reduce:~a~n" (reduce-prod-num action))
-                        (let* ((A (reduce-lhs-num action))
-                               (new-stack (pop-x stack (reduce-rhs-length action)))
-                               (goto (array2d-ref table (car new-stack) A)))
-                          (loop (cons goto new-stack) ip)))
+                        (let-values (((new-stack args)
+                                      (reduce-stack stack 
+                                                    (reduce-rhs-length action)
+                                                    null)))
+                          (let* ((A (reduce-lhs-num action))
+                                 (goto (array2d-ref table (car new-stack) A)))
+                            (loop (cons goto 
+                                        (cons (apply 
+                                               (vector-ref actions 
+                                                           (reduce-prod-num action))
+                                               args)
+                                              new-stack))
+                                  ip))))
                        ((accept? action)
                         (printf "accept~n"))
                        (else (error 'parser)))))))))
