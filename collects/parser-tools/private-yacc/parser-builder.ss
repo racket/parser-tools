@@ -68,8 +68,8 @@
                        (lambda (s n v)
                          (if (> n 0)
                              ,(if src-pos
-                                  `(reduce-stack (cddr s) (sub1 n) `(,(cadr s) ,(caddr s) ,(cadddr s) ,@v))
-                                  `(reduce-stack (cddr s) (sub1 n) (cons (cadr s) v)))
+                                  `(reduce-stack (cddddr s) (sub1 n) `(,(cadr s) ,(caddr s) ,(cadddr s) ,@v))
+                                  `(reduce-stack (cddddr s) (sub1 n) (cons (cadr s) v)))
                              (values s v))))
                       (fix-error
                        (lambda (stack ip get-token)
@@ -111,6 +111,8 @@
                       
                       (find-action
                        (lambda (stack tok)
+                         ;; (display (if (token? tok) (token-name tok) tok))
+                         ;; (newline)
                          (array2d-ref table 
                                       (car stack)
                                       (hash-table-get term-sym->index
@@ -122,12 +124,12 @@
                  (let parsing-loop ((stack (list 0))
 				    (ip (get-token)))
                                              
-                   ;;(display stack)
-                   ;;(newline)
-                   ;;(display (if (token? ip) (token-name ip) ip))
-                   ;;(newline)
+                   ;; (display stack)
+                   ;; (newline)
                    (let* ((tok ,(if src-pos `(car ip) `ip))
                           (action (find-action stack tok)))
+                     ;; (display (if (token? tok) (token-name tok) tok))
+                     ;; (newline)
                      (cond
                        ((shift? action)
                         ;; (printf "shift:~a~n" (shift-state action))
@@ -146,12 +148,25 @@
                                                     null)))
                           (let* ((A (reduce-lhs-num action))
                                  (goto (array2d-ref table (car new-stack) A)))
-                            (parsing-loop (cons goto 
-                                                (cons (apply 
-                                                       (vector-ref actions 
-                                                                   (reduce-prod-num action))
-                                                       args)
-                                                      new-stack))
+                            (parsing-loop ,(if src-pos
+                                               ``(,goto 
+                                                  ,(apply
+                                                    (vector-ref actions
+                                                                (reduce-prod-num action))
+                                                    args)
+                                                  ,(if (null? args)
+                                                       (caddr new-stack)
+                                                       (cadr args))
+                                                  ,(if (null? args)
+                                                       (caddr new-stack)
+                                                       (list-ref args (- (* (reduce-rhs-length action) 3) 1)))
+                                                  ,@new-stack)
+                                               ``(,goto 
+                                                  ,(apply 
+                                                    (vector-ref actions 
+                                                                (reduce-prod-num action))
+                                                    args)
+                                                  ,@new-stack))
                                           ip))))
                        ((accept? action)
                         ;; (printf "accept~n")

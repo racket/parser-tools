@@ -10,16 +10,16 @@
            (lib "readerr.ss" "syntax")
            "private-lex/token.ss")
 
-  (provide lexer lexer-src-loc define-lex-abbrev define-lex-abbrevs
+  (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs
 	   make-lex-buf
 	   get-position position-offset position-line position-col position?
            define-tokens define-empty-tokens)
   
   
-  (define-syntaxes (lexer lexer-src-loc)
+  (define-syntaxes (lexer lexer-src-pos)
     (values
-     (build-lexer #'here `(lambda (x) x))
-     (build-lexer #'here `(lambda (x) (list x first-pos end-pos)))))
+     (build-lexer #'here '(lambda (x) x))
+     (build-lexer #'here '(lambda (x) (list x first-pos end-pos)))))
 
   
   (define-syntax (define-lex-abbrev stx)
