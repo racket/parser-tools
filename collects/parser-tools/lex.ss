@@ -6,6 +6,7 @@
   (require-for-syntax "private-lex/generate-code.ss")
   (require-for-syntax "private-lex/structs.ss")
   (require (lib "list.ss")
+           (lib "readerr.ss" "syntax")
            "private-lex/token.ss")
   (provide lexer define-lex-abbrev define-lex-abbrevs
 	   make-lex-buf
@@ -20,16 +21,14 @@
                         (let ((match
                                (push-back lb (- length longest-match-length))))
                           (if (not longest-match-action)
-                              (raise (make-exn:read 
-                                      (format "lexer: No match found in input starting with: ~a"
-                                              (list->string (lex-buffer-from lb)))
-                                      (current-continuation-marks)
-                                      (lex-buffer-ip lb)
-                                      #f
-                                      (position-line first-pos)
-                                      (position-col first-pos)
-                                      (position-offset first-pos)
-                                      (- (position-offset end-pos) (position-offset first-pos)))))
+                              (raise-read-error
+                               (format "lexer: No match found in input starting with: ~a"
+                                       (list->string (lex-buffer-from lb)))
+                               #f
+                               (position-line first-pos)
+                               (position-col first-pos)
+                               (position-offset first-pos)
+                               (- (position-offset end-pos) (position-offset first-pos))))
                           (longest-match-action
                            (lambda ()
                              first-pos)
