@@ -12,7 +12,7 @@
 
   (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs
 	   position-offset position-line position-col position?
-           define-tokens define-empty-tokens file-path)
+           define-tokens define-empty-tokens token-name token-value file-path)
   
   (define file-path (make-parameter #f))
   
