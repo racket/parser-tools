@@ -1,6 +1,7 @@
 (module yacc-to-scheme mzscheme
   (require (lib "lex.ss" "parser-tools")
            (lib "yacc.ss" "parser-tools")
+           (lib "readerr.ss" "syntax")
            (lib "list.ss"))
   (provide trans)
   
@@ -31,12 +32,12 @@
     (SYM STRING))
   
   (define get-token-grammar
-    (lexer
+    (lexer-src-pos
      ("%%" '|%%|)
      ((: ":") (string->symbol lexeme))
      (%prec (string->symbol lexeme))
      (#\| 'PIPE)
-     ((: #\newline #\tab " " (comment) (@ "{" (* (^ "}")) "}")) (get-token-grammar input-port))
+     ((: #\newline #\tab " " (comment) (@ "{" (* (^ "}")) "}")) (without-src-pos (get-token-grammar input-port)))
      (#\; 'SEMI)
      (#\' (token-STRING (string->symbol (list->string (match-single-string input-port)))))
      (#\" (token-STRING (string->symbol (list->string (match-double-string input-port)))))
@@ -45,8 +46,15 @@
   (define (parse-grammar enter-term enter-empty-term enter-non-term)
     (parser
      (tokens x y)
-     (error (lambda (tok-ok tok-name tok-value)
-	      (error "Error parsing yacc grammar at token: tok-name with value: tok-value" 'parse-grammar)))
+     (src-pos)
+     (error (lambda (tok-ok tok-name tok-value start-pos end-pos)
+	      (raise-read-error
+	       (format "Error Parsing YACC grammar at token: ~a with value: ~a" tok-name tok-value)
+	       (file-path)
+	       (position-line start-pos)
+	       (position-col start-pos)
+	       (position-offset start-pos)
+	       (- (position-offset end-pos) (position-offset start-pos)))))
 	       
      (end |%%|)
      (start gram)
@@ -105,6 +113,7 @@
 	     (hash-table-remove! terms s)
               (hash-table-remove! eterms s)
               (hash-table-put! nterms s #t))))
+      (file-path filename)
       (regexp-match "%%" i)
       (begin0
        (let ((gram ((parse-grammar enter-term enter-empty-term enter-non-term)
