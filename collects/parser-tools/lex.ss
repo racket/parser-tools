@@ -33,17 +33,16 @@
                                                 x))))
                      (syntax->list (syntax (re-act ...))))
                     (let ((table (generate-table (syntax (re-act ...)) stx)))
-                      (with-syntax ((start-state (table-start table))
-                                    (trans-table (table-trans table))
-                                    (eof-table (table-eof table))
-                                    (no-lookahead (table-no-lookahead table))
-                                    (actions `(vector ,@(vector->list (table-actions table)))))
+                      (with-syntax ((start-state-stx (table-start table))
+                                    (trans-table-stx (table-trans table))
+                                    (eof-table-stx (table-eof table))
+                                    (no-lookahead-stx (table-no-lookahead table))
+                                    (actions-stx `(vector ,@(vector->list (table-actions table)))))
                         (if wrap?
                             (syntax (lambda (lb)
-                                      (lexer-body lb start-state trans-table eof-table actions no-lookahead list)))
+                                      (lexer-body lb start-state-stx trans-table-stx eof-table-stx actions-stx no-lookahead-stx #t)))
                             (syntax (lambda (lb)
-                                      (lexer-body lb start-state trans-table eof-table actions no-lookahead (lambda (a b c) a))))))))))))))
-                            
+                                      (lexer-body lb start-state-stx trans-table-stx eof-table-stx actions-stx no-lookahead-stx #f)))))))))))))
       (values
        (build-lexer #f)
        (build-lexer #t))))
@@ -87,7 +86,7 @@
 
 
   
-  (define (lexer-body lb start-state trans-table eof-table actions no-lookahead wrap)
+  (define (lexer-body lb start-state trans-table eof-table actions no-lookahead wrap?)
     (unless (lex-buffer? lb)
       (raise-type-error 
        'lexer 
@@ -120,14 +119,14 @@
                                 (arithmetic-shift state 8)))))))
           (cond
             ((not next-state)
-             (do-match lb first-pos longest-match-length longest-match-action wrap))
+             (do-match lb first-pos longest-match-length longest-match-action wrap?))
             ((vector-ref no-lookahead next-state)
              (let ((act (vector-ref actions next-state)))
                (do-match lb 
                  first-pos 
                  (if act length longest-match-length)
                  (if act act longest-match-action)
-                 wrap)))
+                 wrap?)))
             (else
              (let ((act (vector-ref actions next-state)))
                (lexer-loop next-state 
@@ -140,7 +139,7 @@
                                length
                                longest-match-length)))))))))
 
-  (define (do-match lb first-pos longest-match-length longest-match-action wrap)
+  (define (do-match lb first-pos longest-match-length longest-match-action wrap?)
     (let* ((match (get-match lb longest-match-length))
            (end-pos (get-position lb)))
       (if (not longest-match-action)
@@ -152,15 +151,15 @@
            (position-offset first-pos)
            (- (position-offset end-pos) (position-offset first-pos))))
       (let/ec ret
-        (wrap
-         (longest-match-action
-          (lambda () first-pos)
-          (lambda () end-pos)
-          (lambda () match)
-          ret
-          lb)
-	 first-pos
-	 end-pos))))
+        (let ((act (longest-match-action
+                    (lambda () first-pos)
+                    (lambda () end-pos)
+                    (lambda () match)
+                    ret
+                    lb)))
+          (if wrap?
+              (list act first-pos end-pos)
+              act)))))
   
   
   ;; Lex buffer is NOT thread safe
