@@ -137,13 +137,13 @@
                                                  ,(if (token? ip) (token-value ip) #f)
                                                  ,@stack)))
 					(else
-					 (printf "discard input:~a~n" tok)
+					 ;; (printf "discard input:~a~n" tok)
 					 (set! ip (get-token))
                                          (set! tok (input->token ip))
 					 (remove-input))))))
 				  (remove-states
 				   (lambda ()
-				     (let ((a (find-action stack 'error #f)))
+				     (let ((a (find-action stack (make-token 'error #f) #f)))
 				       (cond
 					((shift? a)
 					 ;; (printf "shift:~a~n" (shift-state a))

@@ -105,7 +105,7 @@
 	  (set! counter (add1 counter))))
        term-list)))
   
-  ;; Retrieves the terminal symbols from a terminals-def (See terminal-syntax.xx)
+  ;; Retrieves the terminal symbols from a terminals-def (See terminal-syntax.ss)
   ;; get-terms-from-def: syntax-object -> symbol list
   (define (get-terms-from-def term-syn)
     (let ((t (syntax-local-value term-syn (lambda () #f))))
@@ -360,7 +360,14 @@
                     'parser-productions
                     "A production for a non-terminal must be (non-term right-hand-side ...) with at least 1 right hand side"
                     prods-so))))))
-	
+		 
+        (if (not (memq start-sym list-of-non-terms))
+            (raise-syntax-error
+             'parser-start
+             (format "Start symbol ~a not defined as a non-terminal"
+                     start-sym)
+             start))
+                 
         (set! counter 1)
         (let* ((start (make-non-term (gensym) 0))
                (end-non-term (make-non-term (gensym) 1))
@@ -384,14 +391,7 @@
                (nulls (nullable (apply append prods) 
                                 (+ 2 (length non-terms)))))
           
-          
-	  (if (not (memq start-sym list-of-non-terms))
-	      (raise-syntax-error
-	       'parser-start
-	       (format "Start symbol ~a not defined as a non-terminal"
-		       start-sym)
-	       start))
-                 
+
 ;;           (printf "nullable: {~a}~n~n"
 ;;                   (apply string-append
 ;;                          (let loop ((i 0))

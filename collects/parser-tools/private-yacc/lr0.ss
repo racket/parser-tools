@@ -76,7 +76,7 @@
 	     ;; given a non-terminal symbol C, return those non-terminal 
 	     ;; symbols A s.t. C -> An for some string of terminals and
 	     ;; non-terminals n where -> means a rightmost derivation in many 
-	     ;; steps.  Assumes that each non-term can be reduces to a string 
+	     ;; steps.  Assumes that each non-term can be reduced to a string 
 	     ;; of terms.
 	     (first-non-term 
 	      (digraph (grammar-non-terms grammar)
