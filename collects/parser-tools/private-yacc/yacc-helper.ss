@@ -1,9 +1,12 @@
 #cs
 (module yacc-helper mzscheme
 
+  (require (lib "list.ss")
+           "../private-lex/token-syntax.ss")
+  
   ;; General helper routines
   
-  (provide duplicate-list? remove-duplicates overlap? vector-andmap)
+  (provide duplicate-list? remove-duplicates overlap? vector-andmap display-yacc)
   
   (define (vector-andmap f v)
     (let loop ((i 0))
@@ -28,8 +31,6 @@
 		      (dl? (cdr l)))))))
       (dl? l)))
 
-  (require (lib "pretty.ss"))
-  
   ;; remove-duplicates: syntax-object list -> syntax-object list
   ;; removes the duplicates from the lists
   (define (remove-duplicates sl)
@@ -60,6 +61,59 @@
 		  l2)
 	#f)))
 
+  
+  (define (display-yacc grammar tokens start precs port)
+    (let-syntax ((p (syntax-rules ()
+                      ((_ args ...) (fprintf port args ...)))))
+      (let* ((tokens (map syntax-local-value (cdr (syntax->list tokens))))
+             (eterms (filter e-terminals-def? tokens))
+             (terms (filter terminals-def? tokens))
+             (term-table (make-hash-table))
+             (display-rhs
+              (lambda (rhs)
+                (for-each (lambda (sym) (p "~a " (hash-table-get term-table sym (lambda () sym))))
+                          (car rhs))
+                (if (= 3 (length rhs))
+                    (p "%prec ~a" (cadadr rhs)))
+                (p "~n"))))
+        (for-each
+         (lambda (t)
+           (for-each
+            (lambda (t)
+              (hash-table-put! term-table t (format "'~a'" t)))
+            (syntax-object->datum (e-terminals-def-t t))))
+         eterms)
+        (for-each
+         (lambda (t)
+           (for-each
+            (lambda (t)
+              (p "%token ~a~n" t)
+              (hash-table-put! term-table t (format "~a" t)))
+            (syntax-object->datum (terminals-def-t t))))
+         terms)
+        (if precs
+            (for-each (lambda (prec)
+                        (p "%~a " (car prec))
+                        (for-each (lambda (tok)
+                                    (p " ~a" (hash-table-get term-table tok)))
+                                  (cdr prec))
+                        (p "~n"))
+                      (cdr precs)))
+        (p "%start ~a~n" start)
+        (p "%%~n")
+
+        (for-each (lambda (prod)
+                    (let ((nt (car prod)))
+                      (p "~a: " nt)
+                      (display-rhs (cadr prod))
+                      (for-each (lambda (rhs)
+                                  (p "| ")
+                                  (display-rhs rhs))
+                                (cddr prod))
+                      (p ";~n")))
+          (cdr grammar))
+        (p "%%~n"))))
+  
 
 )  
   

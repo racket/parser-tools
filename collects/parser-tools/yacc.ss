@@ -22,10 +22,11 @@
              (end #f)
              (precs #f)
              (suppress #f)
-             (grammar #f))
+             (grammar #f)
+             (yacc-output #f))
          (for-each
           (lambda (arg)
-            (syntax-case* arg (debug error tokens start end precs grammar suppress src-pos)
+            (syntax-case* arg (debug error tokens start end precs grammar suppress src-pos yacc-output)
               (lambda (a b)
                 (eq? (syntax-object->datum a) (syntax-object->datum b)))
               ((debug filename)
@@ -95,6 +96,17 @@
                (if grammar
                    (raise-syntax-error #f "Multiple grammar declarations" stx)
                    (set! grammar arg)))
+              ((yacc-output filename)
+               (cond
+                 ((not (string? (syntax-object->datum (syntax filename))))
+                  (raise-syntax-error 
+                   'parser-yacc-output
+                   "Yacc-output filename must be a string"
+                   (syntax filename)))
+                 (yacc-output
+                  (raise-syntax-error #f "Multiple yacc-output declarations" stx))
+                 (else
+                  (set! yacc-output (syntax-object->datum (syntax filename))))))
               (_ (raise-syntax-error 'parser-args "argument must match (debug filename), (error expression), (tokens def ...), (start non-term), (end tokens ...), (precs decls ...), or  (grammar prods ...)" arg))))
           (syntax->list (syntax (args ...))))
          (if (not tokens)
@@ -117,6 +129,23 @@
                                      precs
                                      grammar
                                      stx)))
+           (if (and yacc-output (not (string=? yacc-output "")))
+               (with-handlers [(exn:i/o:filesystem?
+                                (lambda (e)
+                                  (fprintf 
+                                   (current-error-port)
+                                   "Cannot write yacc-output to file \"~a\".  ~a~n"
+                                   (exn:i/o:filesystem-pathname e)
+                                   (exn:i/o:filesystem-detail e))))]
+                 (call-with-output-file yacc-output
+                   (lambda (port)
+                     (display-yacc (syntax-object->datum grammar) 
+                                   tokens 
+                                   (syntax-object->datum start)
+                                   (if precs
+                                       (syntax-object->datum precs)
+                                       #f)
+                                   port)))))
            (with-syntax ((check-syntax-fix check-syntax-fix)
                          (err error)
                          (ends end)
@@ -308,5 +337,7 @@
                      (raise-read-error 
                       "parser: Could not parse input"
                       #f #f #f #f #f))))))))))
+
   
+
   )

@@ -119,6 +119,7 @@
     (let ((t (syntax-local-value term-syn (lambda () #f))))
       (cond
        ((terminals-def? t) (syntax->list (terminals-def-t t)))
+       ((e-terminals-def? t) (syntax->list (e-terminals-def-t t)))
        (else
 	(raise-syntax-error 
          'parser-tokens

@@ -19,7 +19,9 @@
                  #'here
                  `(begin
                     (define-syntax ,(syntax name)
-                      (make-terminals-def (quote-syntax ,(syntax (terms ...)))))
+                      ,(if empty?
+                           `(make-e-terminals-def (quote-syntax ,(syntax (terms ...))))
+                           `(make-terminals-def (quote-syntax ,(syntax (terms ...))))))
                     ,@(map
                        (lambda (n)
                          (if (eq? (syntax-object->datum n) 'error)
