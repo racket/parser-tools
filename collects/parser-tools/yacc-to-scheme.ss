@@ -82,6 +82,9 @@
 	  (enter-empty-term $1)
 	  (cons $1 $2)))))))
   
+  (define (symbol<? a b)
+    (string<? (symbol->string a) (symbol->string b)))
+  
   (define (trans filename)
     (let* ((i (open-input-file filename))
            (terms (make-hash-table))
@@ -107,8 +110,8 @@
 		      (let ((t (get-token-grammar i)))
 			t)))))
           `(begin
-             (define-tokens t ,(quicksort (hash-table-map terms (lambda (k v) k)) string<?))
-             (define-empty-tokens et ,(quicksort (hash-table-map eterms (lambda (k v) k)) string<?))
+             (define-tokens t ,(quicksort (hash-table-map terms (lambda (k v) k)) symbol<?))
+             (define-empty-tokens et ,(quicksort (hash-table-map eterms (lambda (k v) k)) symbol<?))
              (parser
               (start ___)
               (end ___)
