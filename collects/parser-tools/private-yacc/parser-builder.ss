@@ -69,7 +69,7 @@
         #`(when #f
             (let ((bind void) ... (tmp void) ...)
               (void bound ... ... term-group ... start ... end ... prec ...))))))
-  
+  (require (lib "list.ss") "parser-actions.ss")
   (define (build-parser filename src-pos suppress input-terms start end assocs prods)
     (let* ((grammar (parse-input input-terms start end assocs prods src-pos))
            (table (build-table grammar filename suppress))
@@ -79,6 +79,28 @@
       (for-each (lambda (term)
                   (hash-table-put! all-tokens (gram-sym-symbol term) #t))
                 (send grammar get-terms))
+      #;(let ((num-states (vector-length table))
+            (num-gram-syms (+ (send grammar get-num-terms)
+                              (send grammar get-num-non-terms)))
+            (num-ht-entries (apply + (map length (vector->list table))))
+            (num-reduces
+             (let ((ht (make-hash-table)))
+               (for-each
+                (lambda (x)
+                  (when (reduce? x)
+                    (hash-table-put! ht x #t)))
+                (map cdr (apply append (vector->list table))))
+               (length (hash-table-map ht void)))))
+        (printf "~a states, ~a grammar symbols, ~a hash-table entries, ~a reduces~n"
+                num-states num-gram-syms num-ht-entries num-reduces)
+        (printf "~a -- ~aKB, previously ~aKB~n"
+                (/ (+ 2 num-states
+                      (* 4 num-states) (* 2 1.5 num-ht-entries)
+                      (* 5 num-reduces)) 256.0)
+                (/ (+ 2 num-states
+                      (* 4 num-states) (* 2 2.3 num-ht-entries)
+                      (* 5 num-reduces)) 256.0)
+                (/ (+ 2 (* num-states num-gram-syms) (* 5 num-reduces)) 256.0)))
       (values table
               all-tokens
               actions-code

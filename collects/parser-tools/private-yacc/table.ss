@@ -227,7 +227,8 @@
            (term-vector (list->vector (send g get-terms)))
            (end-terms (send g get-end-terms))
            (table (make-parse-table (send a get-num-states)))
-           (get-lookahead (compute-LA a g)))
+           (get-lookahead (compute-LA a g))
+           (reduce-cache (make-hash-table 'equal)))
 
       (for-each
        (lambda (trans-key/state)
@@ -253,10 +254,15 @@
                (bit-vector-for-each 
                 (lambda (term-index)
                   (unless (start-item? item)
-                    (table-add! table
-                                (kernel-index state)
-                                (vector-ref term-vector term-index)
-                                (make-reduce item-prod))))
+                    (let ((r (hash-table-get reduce-cache item-prod
+                                             (lambda ()
+                                               (let ((r (make-reduce item-prod)))
+                                                 (hash-table-put! reduce-cache item-prod r)
+                                                 r)))))
+                      (table-add! table
+                                  (kernel-index state)
+                                  (vector-ref term-vector term-index)
+                                  r))))
                 (get-lookahead state item-prod))))
            (append (hash-table-get (send a get-epsilon-trans) state (lambda () null))
                    (filter (lambda (item)
