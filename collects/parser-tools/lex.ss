@@ -60,10 +60,17 @@
 						"expects regular expression / action pairs"
 						x))))
 		     (syntax->list (syntax (re-act ...))))
-                    (let* ((spec/re-act-lst (syntax->list (syntax (re-act ...))))
-                           (spec-act (get-special-action spec/re-act-lst 'special #'here))
-                           (spec-comment-act (get-special-action spec/re-act-lst 'special-comment #'here))
-                           (re-act-lst (filter-out-specials spec/re-act-lst '(special special-comment))))
+                    (let* ((error-continue-arg (gensym))
+                           (spec/re-act-lst
+                            (syntax->list (syntax (re-act ...))))
+                           (spec-act 
+                            (get-special-action spec/re-act-lst 'special #'(void)))
+                           (spec-comment-act 
+                            (get-special-action spec/re-act-lst 'special-comment 
+                                                #`(#,error-continue-arg input-port)))
+                           (re-act-lst
+                            (filter-out-specials spec/re-act-lst
+                                                 '(special special-comment special-error))))
                       (let ((table (generate-table re-act-lst stx)))
                         (with-syntax ((start-state-stx (table-start table))
                                       (trans-table-stx (table-trans table))
@@ -79,7 +86,8 @@
                                       (spec-comment-act-stx
                                        (datum->syntax-object
                                         spec-comment-act
-                                        `(lambda (start-pos end-pos ,(gensym) return-without-pos input-port)
+                                        `(lambda (start-pos end-pos ,error-continue-arg
+                                                  return-without-pos input-port)
                                            ,spec-comment-act)
                                         spec-comment-act))
                                       (wrap? wrap?))
@@ -143,76 +151,80 @@
       (let ((first-pos (get-position ip)))
         (let-values (((longest-match-length length longest-match-action)
                       (lexer ip peek-string)))
-          (check-match ip first-pos longest-match-length length (vector-ref actions longest-match-action) wrap?)))))
+          (check-match ip first-pos longest-match-length length
+                       (vector-ref actions longest-match-action) wrap?)))))
   
   (define (lexer-body start-state trans-table eof-table actions no-lookahead
                       special-action special-comment-action wrap?)
-    (lambda (ip)
-      (unless (input-port? ip)
-        (raise-type-error 
-         'lexer 
-         "input-port"
-         0
-         ip))
-      (let ((first-pos (get-position ip))
-            (first-char (peek-char-or-special ip 0)))
-        (cond
-          ((eq? 'special first-char)
-           (let* ((comment? #f)
-                  (spec (with-handlers ((exn:special-comment?
-                                         (lambda (x) (set! comment? #t) #f)))
-                          (read-char-or-special ip))))
-             (do-match ip first-pos (if comment?
-                                        special-comment-action
-                                        special-action)
-                       spec wrap?)))
-          (else
-           (let lexer-loop (
-                            ;; current-state
-                            (state start-state)
-                            ;; the character to transition on
-                            (char first-char)
-                            ;; action for the longest match seen thus far
-                            ;; including a match at the current state
-                            (longest-match-action 
-                             (vector-ref actions start-state))
-                            ;; how many characters have been read
-                            ;; including the one just read
-                            (length 1)
-                            ;; how many characters are in the longest match
-                            (longest-match-length 1))
-             (let ((next-state 
-                    (cond
-                      ((eof-object? char)
-                       (vector-ref eof-table state))
-                      ((eq? char 'special)
-                       #f)
-                      (else
-                       (vector-ref 
-                        trans-table
-                        (+ (char->integer char) (* 256 state)))))))
-               (cond
-                 ((not next-state)
-                  (check-match ip first-pos longest-match-length length longest-match-action wrap?))
-                 ((vector-ref no-lookahead next-state)
-                  (let ((act (vector-ref actions next-state)))
-                    (check-match ip 
-                                 first-pos 
-                                 (if act length longest-match-length)
-                                 length
-                                 (if act act longest-match-action)
-                                 wrap?)))
-                 (else
-                  (let ((act (vector-ref actions next-state)))
-                    (lexer-loop next-state 
-                                (peek-char-or-special ip length)
-                                (if act
-                                    act
-                                    longest-match-action)
-                                (add1 length)
-                                (if act
-                                    length
-                                    longest-match-length))))))))))))
+    (letrec ((lexer
+              (lambda (ip)
+                (unless (input-port? ip)
+                  (raise-type-error 
+                   'lexer 
+                   "input-port"
+                   0
+                   ip))
+                (let ((first-pos (get-position ip))
+                      (first-char (peek-char-or-special ip 0)))
+                  (cond
+                    ((eq? 'special first-char)
+                     (let* ((comment? #f)
+                            (spec (with-handlers ((exn:special-comment?
+                                                   (lambda (x) (set! comment? #t) lexer)))
+                                    (read-char-or-special ip))))
+                       (do-match ip first-pos (if comment?
+                                                  special-comment-action
+                                                  special-action)
+                                 spec wrap?)))
+                    (else
+                     (let lexer-loop (
+                                      ;; current-state
+                                      (state start-state)
+                                      ;; the character to transition on
+                                      (char first-char)
+                                      ;; action for the longest match seen thus far
+                                      ;; including a match at the current state
+                                      (longest-match-action 
+                                       (vector-ref actions start-state))
+                                      ;; how many characters have been read
+                                      ;; including the one just read
+                                      (length 1)
+                                      ;; how many characters are in the longest match
+                                      (longest-match-length 1))
+                       (let ((next-state 
+                              (cond
+                                ((eof-object? char)
+                                 (vector-ref eof-table state))
+                                ((eq? char 'special)
+                                 #f)
+                                (else
+                                 (vector-ref 
+                                  trans-table
+                                  (+ (char->integer char) (* 256 state)))))))
+                         (cond
+                           ((not next-state)
+                            (check-match ip first-pos longest-match-length
+                                         length longest-match-action wrap?))
+                           ((vector-ref no-lookahead next-state)
+                            (let ((act (vector-ref actions next-state)))
+                              (check-match ip 
+                                           first-pos 
+                                           (if act length longest-match-length)
+                                           length
+                                           (if act act longest-match-action)
+                                           wrap?)))
+                           (else
+                            (let ((act (vector-ref actions next-state)))
+                              (lexer-loop next-state 
+                                          (peek-char-or-special ip length)
+                                          (if act
+                                              act
+                                              longest-match-action)
+                                          (add1 length)
+                                          (if act
+                                              length
+                                              longest-match-length)))))))))))))
+      lexer))
       
   (define id (lambda (x) x))
 
