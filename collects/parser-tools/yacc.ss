@@ -1,40 +1,102 @@
 #cs
 (module yacc mzscheme
 
-  (require-for-syntax "private-yacc/parser-builder.ss")
+  (require-for-syntax "private-yacc/parser-builder.ss"
+                      "private-yacc/yacc-helper.ss")
   (require "private-yacc/terminal.ss" 
            "private-yacc/parser-actions.ss"
            "private-yacc/array2d.ss")
   
-  (provide define-tokens define-empty-tokens parser parser-debug)
+  (provide define-tokens define-empty-tokens parser)
 
   (define-syntax parser
     (lambda (stx)
       (syntax-case stx ()
-	((_ start input-terms assocs prods) 
-         (build-parser (syntax start) (syntax input-terms) 
-                       (syntax assocs) (syntax prods)
-                       "" #'here stx))
+	((_ args ...)
+         (let ((arg-list (syntax->list (syntax (args ...))))
+               (debug #f)
+               (error #f)
+               (tokens #f)
+               (start #f)
+               (end #f)
+               (precs #f)
+               (grammar #f))
+           (for-each
+            (lambda (arg)
+              (syntax-case arg (debug error tokens start end precs grammar)
+                ((debug filename)
+                 (cond
+                   ((not (string? (syntax-object->datum (syntax filename))))
+                    (raise-syntax-error 
+                     'parser-debug
+                     "Debugging filename must be a string"
+                     (syntax filename)))
+                   (debug
+                    (raise-syntax-error #f "Multiple debug declarations" stx))
+                   (else
+                    (set! debug (syntax-object->datum (syntax filename))))))
+                ((error expression)
+                 (if error
+                     (raise-syntax-error #f "Multiple error declarations" stx)
+                     (set! error (syntax expression))))
+                ((tokens def ...)
+                 (if tokens
+                     (raise-syntax-error  #f "Multiple tokens declarations" stx)
+                     (set! tokens arg)))
+                ((start symbol)
+                 (cond
+                   ((not (identifier? (syntax symbol)))
+                    (raise-syntax-error
+                     'parser-start
+                     "Start non-terminal must be a symbol"
+                     (syntax symbol)))
+                   (start
+                    (raise-syntax-error #f "Multiple start declarations" stx))
+                   (else
+                    (set! start (syntax symbol)))))
+                ((end symbols ...)
+                 (begin
+                   (for-each
+                    (lambda (sym)
+                      (if (not (identifier? sym))
+                          (raise-syntax-error
+                           'parser-end
+                           "End token must be a symbol"
+                           sym)))
+                    (syntax->list (syntax (symbols ...))))
+                   (if end
+                       (raise-syntax-error #f "Multiple end declarations" stx))
+                   (set! end (syntax->list (syntax (symbols ...))))))
+                ((precs decls ...)
+                 (if precs
+                     (raise-syntax-error #f "Multiple precs declarations" stx)
+                     (set! precs arg)))
+                ((grammar prods ...)
+                 (if grammar
+                     (raise-syntax-error #f "Multiple grammar declarations" stx)
+                     (set! grammar arg)))
+                (_ (raise-syntax-error 'parser-args "argument must match (debug filename), (error expression), (tokens def ...), (start non-term), (end tokens ...), (precs decls ...), or  (grammar prods ...)" arg))))
+            (syntax->list (syntax (args ...))))
+           (if (not tokens)
+               (raise-syntax-error #f "missing tokens declaration" stx))
+           (if (not grammar)
+               (raise-syntax-error #f "missing error declaration" stx))
+           (if (not end)
+               (raise-syntax-error #f "missing end declaration" stx))
+           (build-parser (if debug debug "")
+                         error
+                         tokens
+                         start
+                         end
+                         precs
+                         grammar
+                         #'here
+                         stx)))
         (_
          (raise-syntax-error
           #f
-          "parser must have the form (parser start-symbol tokens precedence/associativity productions)"
+          "parser must have the form (parser args ...)"
           stx)))))
-        
+  
 
-  (define-syntax parser-debug
-    (lambda (stx)
-      (syntax-case stx ()
-	((_ filename start input-terms assocs prods)
-	 (string? (syntax-object->datum (syntax filename)))
-         (build-parser (syntax start) (syntax input-terms) 
-                       (syntax assocs) (syntax prods)
-                       (syntax-object->datum (syntax filename))
-                       #'here stx))
-        (_
-         (raise-syntax-error
-          #f
-          "parser must have the form (parser-debug filename start-symbol tokens precedence/associativity productions) where filename is a string"
-          stx)))))
-         
 )

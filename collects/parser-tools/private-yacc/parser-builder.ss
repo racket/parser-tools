@@ -8,8 +8,8 @@
   
   (provide build-parser)
   
-  (define (build-parser start input-terms assocs prods filename runtime src)
-    (let* ((grammar (parse-input start input-terms assocs prods runtime))
+  (define (build-parser filename error-expr input-terms start end assocs prods runtime src)
+    (let* ((grammar (parse-input start end input-terms assocs prods runtime))
            (table (build-table grammar filename))
            (table-code 
             (cons 'vector 
@@ -42,7 +42,8 @@
             `(vector ,@(map prod-action (grammar-prods grammar))))
            
            (parser-code
-            `(letrec ((term-sym->index ,token-code)
+            `(letrec ((err ,error-expr)
+                      (term-sym->index ,token-code)
                       (table ,table-code)
                       (actions ,actions-code)
                       (reduce-stack
@@ -61,7 +62,8 @@
                           (a (hash-table-get term-sym->index 
                                              (if (token? ip)
                                                  (token-name ip)
-                                                 ip)))
+                                                 ip)
+                                             err))
                           (action (array2d-ref table s a)))
                      (cond
                        ((shift? action)
@@ -88,7 +90,7 @@
                                   ip))))
                        ((accept? action)
                         (printf "accept~n"))
-                       (else (error 'parser)))))))))
+                       (else (err)))))))))
       (datum->syntax-object
        runtime
        parser-code

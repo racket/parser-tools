@@ -7,17 +7,22 @@
 
   (define-struct terminals-def (t))
 
-  (define (define-tokens-helper stx hack empty?)
+  (define (define-tokens-helper stx runtime empty?)
     (syntax-case stx ()
       ((_ name (terms ...))
        (andmap identifier? (syntax->list (syntax (terms ...))))
        (datum->syntax-object
-	hack
+	runtime
 	`(begin
 	   (define-syntax ,(syntax name)
 	     (make-terminals-def ',(syntax (terms ...))))
 	   ,@(map
 	      (lambda (n)
+                (if (eq? (syntax-object->datum n) 'error)
+                    (raise-syntax-error
+                     #f
+                     "Cannot define a token named error."
+                     stx))
 		`(define (,(datum->syntax-object 
 			    n
 			    (string->symbol 

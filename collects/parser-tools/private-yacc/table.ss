@@ -264,8 +264,7 @@
                                        (vector-length (prod-rhs (item-prod item))))))))
 		    (get-lookahead (vector-ref get-state state)
 				   (item-prod item))))
-		 items))
-	      
+		 items))	      
 	      (loop (add1 state)))))
       (resolve-prec-conflicts table get-term get-prod num-states num-terms
 			      num-non-terms)

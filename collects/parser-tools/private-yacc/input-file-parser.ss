@@ -111,31 +111,44 @@
          "undefined token group"
          term-syn)))))
   
-  ;; parse-input: syntax-object^4 * string -> grammar
-  (define (parse-input start term-defs prec-decls prods runtime)
+  ;; parse-input: syntax-object * syntax-object list * syntax-object^4 -> grammar
+  (define (parse-input start ends term-defs prec-decls prods runtime)
     (let* ((counter 0)
            
            (start-sym (syntax-object->datum start))
            
-           ;; Get the list of terminals out of input-terms
            (list-of-terms
-            (syntax-case term-defs ()
-              ((term-def ...)
-               (andmap identifier? (syntax->list term-defs))
+            (syntax-case term-defs (tokens)
+              ((tokens term-def ...)
+               (andmap identifier? (syntax->list (syntax (term-def ...))))
                (remove-duplicates
-                (apply append
-                       (map get-terms-from-def 
-                            (syntax->list term-defs)))))
+                (cons 'error
+                      (apply append
+                             (map get-terms-from-def 
+                                  (syntax->list (syntax (term-def ...))))))))
               (_
                (raise-syntax-error
                 'parser-tokens
-                "Token list must be (symbol ...)"
+                "Token declaration must be (tokens symbol ...)"
                 term-defs))))
+
+           (end-terms
+            (map
+             (lambda (end)
+               (if (not (memq (syntax-object->datum end) list-of-terms))
+                   (raise-syntax-error
+                    'parser-end-tokens
+                    (format "End token ~a not defined as a token"
+                            (syntax-object->datum end))
+                    end)
+                   (syntax-object->datum end)))
+             ends))
            
+           ;; Get the list of terminals out of input-terms
            
            (list-of-non-terms
-            (syntax-case prods ()
-              (((non-term production ...) ...)
+            (syntax-case prods (grammar)
+              ((grammar (non-term production ...) ...)
                (begin
                  (for-each
                   (lambda (nts)
@@ -167,14 +180,14 @@
                  (syntax-object->datum (syntax (non-term ...)))))
               (_
                (raise-syntax-error
-                'parser-productions
-                "Productions must be of the form ((non-terminal productions ...) ...)"
+                'parser-grammar
+                "Grammar must be of the form (grammar (non-terminal productions ...) ...)"
                 prods))))
            
            ;; Check the precedence declarations for errors and turn them into data
            (precs
-            (syntax-case prec-decls ()
-              (((type term ...) ...)
+            (syntax-case prec-decls (precs)
+              ((precs (type term ...) ...)
                (let ((p-terms 
                       (apply append (syntax-object->datum 
                                      (syntax ((term ...) ...))))))
@@ -210,11 +223,11 @@
                             "Associativity must be left, right or nonassoc"
                             type)))
                      (syntax->list (syntax (type ...))))
-                    (syntax-object->datum prec-decls)))))
+                    (cdr (syntax-object->datum prec-decls))))))
               (_
                (raise-syntax-error
                 'parser-precedences
-                "Precedence declaration must be of the form ((assoc term ...) ...) where assoc is left, right or nonassoc"
+                "Precedence declaration must be of the form (precs (assoc term ...) ...) where assoc is left, right or nonassoc"
                 prec-decls))))
            
            (terms (build-terms list-of-terms precs))
@@ -346,14 +359,14 @@
                (prods 
                 (cons
                  (list (make-prod start
-                                  (vector (hash-table-get non-term-table 
-                                                          start-sym))
+                                  (vector (hash-table-get non-term-table start-sym)
+                                          (hash-table-get term-table (car end-terms)))
                                   0
                                   #f
                                   (datum->syntax-object
                                    runtime
                                    `(lambda (x) x))))
-                 (map parse-prods-for-nt (syntax->list prods))))
+                 (map parse-prods-for-nt (cdr (syntax->list prods)))))
                (nulls (nullable (apply append prods) 
                                 (add1 (length non-terms)))))
           
@@ -376,4 +389,5 @@
            nulls
            (cons start non-terms)
            terms
-           counter))))))
+           counter
+           end-terms))))))

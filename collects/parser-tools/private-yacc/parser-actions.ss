@@ -5,7 +5,7 @@
   
   (provide shift? reduce? accept? 
 	   shift-state reduce-prod-num reduce-lhs-num reduce-rhs-length 
-	   make-shift make-reduce)
+	   make-shift make-reduce make-accept)
 
   ;; action = (shift int)
   ;;        | (reduce int int int)

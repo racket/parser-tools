@@ -30,6 +30,7 @@
    (rename gram-terms grammar-terms)
    (rename gram-num-prods grammar-num-prods)
    (rename gram-prods grammar-prods)
+   (rename gram-end-terms grammar-end-terms)
 
    ;; Things that work on productions
    prod-index prod-prec prod-rhs prod-lhs prod-action)
@@ -155,7 +156,8 @@
   ;;                      (bool vector)
   ;;                      (non-term list)
   ;;                      (term list)
-  ;;                      int)
+  ;;                      int
+  ;;                      (term list))
   ;; 
   ;; The nt-prods field is indexed by the number assigned to the non-term and
   ;;   contains the list of productions for that non-term
@@ -163,7 +165,7 @@
   ;; The nulls field is indexed by the index for a non-term and is trus iff 
   ;;   the non-term is nullable
   (define-struct gram 
-    (nt-prods prods nulls non-terms terms num-prods))
+    (nt-prods prods nulls non-terms terms num-prods end-terms))
 
 
   ;; get-nt-prods: grammar * non-term -> production list
