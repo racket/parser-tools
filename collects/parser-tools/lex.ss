@@ -54,8 +54,6 @@
   (define-for-syntax (make-lexer-trans src-pos?)
     (lambda (stx)
       (syntax-case stx ()
-        ((_)
-         (raise-syntax-error #f "accepts the empty string" stx))
         ((_ re-act ...)
          (begin
            (for-each
@@ -98,7 +96,7 @@
 				       name-lst)))
              (let-values (((trans start action-names no-look disappeared-uses)
                            (build-lexer re-actname-lst)))
-               #;(when (vector-ref action-names start)
+               (when (vector-ref action-names start)
                  (raise-syntax-error #f "accepts the empty string" stx))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
