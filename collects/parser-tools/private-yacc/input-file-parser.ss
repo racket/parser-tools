@@ -8,6 +8,14 @@
 
   (provide parse-input)
 
+  ;; get-args: num * syntax-object -> syntax-object list
+  (define (get-args x act)
+    (let loop ((i 1))
+      (cond
+        ((> i x) null)
+        (else (cons (datum->syntax-object act (string->symbol (format "$~a" i)))
+                    (loop (add1 i)))))))
+    
   ;; nullable: production list * int -> non-term set
   ;; determines which non-terminals can derive epsilon
   (define (nullable prods num-nts)
@@ -104,7 +112,7 @@
          term-syn)))))
   
   ;; parse-input: syntax-object^4 * string -> grammar
-  (define (parse-input start term-defs prec-decls prods)
+  (define (parse-input start term-defs prec-decls prods runtime)
     (let* ((counter 0)
            
            (start-sym (syntax-object->datum start))
@@ -261,9 +269,18 @@
                     "production right-hand-side must have form (symbol ...)"
                     prod-so)))))
 	     
+             ;; parse-action: gram-sym vector * syntax-object -> syntax-object
+             (parse-action 
+              (lambda (prod act)
+                (datum->syntax-object
+                 runtime
+                 `(lambda ,(get-args (vector-length prod) act)
+                    ,act)
+                 act)))
+             
 	     ;; parse-prod+action: non-term * syntax-object -> production
 	     (parse-prod+action
-	      (lambda (nt prod-so) 
+	      (lambda (nt prod-so)
                 (syntax-case prod-so (prec)
                   ((prod-rhs action)
                    (let ((p (parse-prod (syntax prod-rhs))))
@@ -278,27 +295,30 @@
                                 (if (term? gs)
                                     (term-prec gs)
                                     (loop (sub1 i))))
-                              #f)))
+                              #f))
+                        (parse-action p (syntax action)))
                        (set! counter (add1 counter)))))
                   ((prod-rhs (prec term) action)
                    (identifier? (syntax term))
-                   (begin0
-                     (make-prod 
-                      nt 
-                      (parse-prod (syntax prod-rhs))
-                      counter
-                      (term-prec
-                       (hash-table-get 
-                        term-table 
-                        (syntax-object->datum (syntax term))
-                        (lambda ()
-                          (raise-syntax-error
-                           'parser-production-rhs
-                           (format
-                            "unrecognized terminal ~a in precedence declaration"
-                            (syntax-object->datum (syntax term)))
-                           (syntax term)))))
-                      (set! counter (add1 counter)))))
+                   (let ((p (parse-prod (syntax prod-rhs))))
+                     (begin0
+                       (make-prod 
+                        nt 
+                        p
+                        counter
+                        (term-prec
+                         (hash-table-get 
+                          term-table 
+                          (syntax-object->datum (syntax term))
+                          (lambda ()
+                            (raise-syntax-error
+                             'parser-production-rhs
+                             (format
+                              "unrecognized terminal ~a in precedence declaration"
+                              (syntax-object->datum (syntax term)))
+                             (syntax term)))))
+                        (parse-action p (syntax action)))
+                       (set! counter (add1 counter)))))
                   (_
                    (raise-syntax-error
                     'parser-production-rhs
@@ -329,7 +349,10 @@
                                   (vector (hash-table-get non-term-table 
                                                           start-sym))
                                   0
-                                  #f))
+                                  #f
+                                  (datum->syntax-object
+                                   runtime
+                                   `(lambda (x) x))))
                  (map parse-prods-for-nt (syntax->list prods))))
                (nulls (nullable (apply append prods) 
                                 (add1 (length non-terms)))))
@@ -353,4 +376,4 @@
            nulls
            (cons start non-terms)
            terms
-           counter))))))            
+           counter))))))

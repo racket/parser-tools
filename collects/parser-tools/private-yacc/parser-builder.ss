@@ -9,7 +9,7 @@
   (provide build-parser)
   
   (define (build-parser start input-terms assocs prods filename runtime src)
-    (let* ((grammar (parse-input start input-terms assocs prods))
+    (let* ((grammar (parse-input start input-terms assocs prods runtime))
            (table (build-table grammar filename))
            (table-code 
             (cons 'vector 
@@ -38,9 +38,13 @@
                         (grammar-terms grammar))
                  ht)))
            
+           (actions-code
+            `(vector ,@(map prod-action (grammar-prods grammar))))
+           
            (parser-code
             `(letrec ((term-sym->index ,token-code)
                       (table ,table-code)
+                      (actions ,actions-code)
                       (pop-x
                        (lambda (s n)
                          (if (> n 0)

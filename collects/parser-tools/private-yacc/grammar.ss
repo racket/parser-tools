@@ -1,12 +1,9 @@
 #cs
 (module grammar mzscheme
- 
+  
   ;; Constructs to create and access grammars, the internal
   ;; representation of the input to the parser generator.
-  
-  (require (lib "list.ss")
-           "yacc-helper.ss")
-
+    
   (provide 
      
    (rename export-make-item make-item)
@@ -35,7 +32,7 @@
    (rename gram-prods grammar-prods)
 
    ;; Things that work on productions
-   prod-index prod-prec prod-rhs prod-lhs)
+   prod-index prod-prec prod-rhs prod-lhs prod-action)
 
 
   ;;---------------------- LR items --------------------------
@@ -188,6 +185,6 @@
 
   ;; ------------------------ Productions ---------------------------
   
-  ;; production = (make-prod non-term (gram-sym vector) int prec)
-  (define-struct prod (lhs rhs index prec))
+  ;; production = (make-prod non-term (gram-sym vector) int prec syntax-object)
+  (define-struct prod (lhs rhs index prec action))
 )
