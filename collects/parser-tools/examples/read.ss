@@ -11,7 +11,7 @@
            (lib "readerr.ss" "syntax"))
   
   (define-tokens data (DATUM))
-  (define-empty-tokens delim (OP CP HASHOP QUOTE QUASI-QUOTE UNQUOTE UNQUOTE-SPLICING DOT EOF))
+  (define-empty-tokens delim (OP CP HASHOP QUOTE QUASIQUOTE UNQUOTE UNQUOTE-SPLICING DOT EOF))
   
   (define scheme-lexer
     (lexer-src-pos
@@ -36,7 +36,7 @@
      [(num10) (token-DATUM (string->number (get-lexeme) 10))]
      [(num16) (token-DATUM (string->number (get-lexeme) 16))]
      ["'" 'QUOTE]
-     ["`" 'QUASI-QUOTE]
+     ["`" 'QUASIQUOTE]
      ["," 'UNQUOTE]
      [",@" 'UNQUOTE-SPLICING]
      ["." 'DOT]
@@ -224,7 +224,7 @@
             [(OP sexp-list CP) (build-so (reverse $2) 1 3)]
             [(HASHOP sexp-list CP) (build-so (list->vector (reverse $2)) 1 3)]
             [(QUOTE sexp) (build-so (list 'quote $2) 1 2)]
-            [(QUASI-QUOTE sexp) (build-so (list 'quasi-quote $2) 1 2)]
+            [(QUASIQUOTE sexp) (build-so (list 'quasiquote $2) 1 2)]
             [(UNQUOTE sexp) (build-so (list 'unquote $2) 1 2)]
             [(UNQUOTE-SPLICING sexp) (build-so (list 'unquote-splicing $2) 1 2)]
             [(OP sexp-list DOT sexp CP) (build-so (append (reverse $2) $4) 1 5)])
