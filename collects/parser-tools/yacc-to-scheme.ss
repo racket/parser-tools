@@ -24,8 +24,8 @@
    (digit (- "0" "9"))
    (initial (: (letter) ! $ % & * / < = > ? ^ _ ~ @))
    (subsequent (: (initial) (digit) + - #\. @))
-   (comment (@ /* (* (@ (* (^ *)) (+ *) (^ / *))) */)))
-   
+   (comment (@ /* (* (: (^ *) (@ * (^ /)))) */)))
+
   (define-empty-tokens x
     (EOF PIPE |:| SEMI |%%| %prec))
   (define-tokens y
@@ -113,6 +113,7 @@
 	     (hash-table-remove! terms s)
               (hash-table-remove! eterms s)
               (hash-table-put! nterms s #t))))
+      (port-count-lines! i)
       (file-path filename)
       (regexp-match "%%" i)
       (begin0
