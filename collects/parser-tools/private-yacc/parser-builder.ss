@@ -8,19 +8,31 @@
   
   (provide build-parser)
   
+  (define (strip so)
+    (syntax-local-introduce
+     (datum->syntax-object
+      #f
+      (syntax-object->datum so)
+      so
+      so)))
+  
   (define (fix-check-syntax start terms prods)
     (syntax-case prods ()
       ((_ (bind ((bound ...) x ...) ...) ...)
        (let ((binds (syntax->list (syntax (bind ...))))
              (bounds (cons start 
-                           (apply append (map syntax->list 
-                                              (apply append (map syntax->list 
-                                                                 (syntax->list (syntax (((bound ...) ...) ...)))))))))
+                           (apply 
+                            append 
+                            (map syntax->list 
+                                 (apply 
+                                  append 
+                                  (map syntax->list 
+                                       (syntax->list (syntax (((bound ...) ...) ...)))))))))
              (terms (get-term-list terms)))
          `(if #f (let ,(map (lambda (bind)
-                              `(,bind void))
+                              `(,(strip bind) void))
                             (append terms binds))
-                   (void ,@bounds)))))))
+                   (void ,@(map strip bounds))))))))
   
   (define (build-parser filename src-pos suppress error-expr input-terms start end assocs prods runtime src)
     (let* ((grammar (parse-input start end input-terms assocs prods runtime src-pos))
@@ -209,5 +221,5 @@
                                #f #f #f #f #f)))))))))))
       (datum->syntax-object
        runtime
-       `(begin #|,(fix-check-syntax start input-terms prods)|# ,parser-code)
+       `(begin ,(fix-check-syntax start input-terms prods) ,parser-code)
        src))))
