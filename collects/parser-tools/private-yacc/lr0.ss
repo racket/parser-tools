@@ -6,12 +6,117 @@
   (require "grammar.ss"
 	   "graph.ss"
            "array2d.ss"
-	   (lib "list.ss"))
+	   (lib "list.ss")
+	   (lib "class.ss"))
   
-  (provide build-lr0-automaton run-automaton (struct trans-key (st gs))
-	   get-mapped-lr0-non-term-keys lr0-states lr0-epsilon-trans
-	   kernel-items kernel-index for-each-state)
+  (provide build-lr0-automaton lr0%
+	   (struct trans-key (st gs))
+	   kernel-items kernel-index kernel-list-remove-duplicates)
+  
+  ;; kernel = (make-kernel (LR1-item list) index)
+  ;;   the list must be kept sorted according to item<? so that equal? can
+  ;;   be used to compare kernels
+  ;; trans-key = (make-trans-key kernel gram-sym)
+  (define-struct kernel (items index) (make-inspector))
+  (define-struct trans-key (st gs) (make-inspector))
 
+  (define (kernel-list-remove-duplicates k num-states)
+    (let ((v (make-vector num-states #f)))
+      (for-each
+       (lambda (k)
+	 (vector-set! v (kernel-index k) k))
+       k)
+      (let loop ((i 0))
+	(cond
+	 ((< i num-states)
+	  (let ((k (vector-ref v i)))
+	    (if k 
+		(cons k (loop (add1 i)))
+		(loop (add1 i)))))
+	 (else null)))))
+		
+	  
+
+  ;; LR0-automaton = object of class lr0%
+  (define lr0%
+    (class object%
+      (super-instantiate ())
+      (init term-hash non-term-hash)
+      (init-field states epsilons num-terms num-non-terms)
+      
+      (define term-transitions (make-lr0-table term-hash (vector-length states) num-terms))
+      (define non-term-transitions (make-lr0-table non-term-hash (vector-length states) num-non-terms))
+      
+      (define reverse-term-hash (reverse-hash term-hash))
+      (define reverse-non-term-hash (reverse-hash non-term-hash))
+      (define reverse-term-transitions (make-lr0-table reverse-term-hash (vector-length states) num-terms))
+      (define reverse-non-term-transitions (make-lr0-table reverse-non-term-hash (vector-length states) num-non-terms))
+      
+      (define mapped-non-terms
+	(hash-table-map non-term-hash (lambda (k v) k)))
+      
+      (define reverse-mapped-non-terms
+	(hash-table-map reverse-non-term-hash (lambda (k v) k)))
+      
+      (define/public (get-mapped-non-term-keys)
+	mapped-non-terms)
+
+      (define/public (get-states)
+	states)
+
+      (define/public (get-epsilon-trans)
+	epsilons)
+
+      ;; Iteration over the states in an automaton
+      (define/public (for-each-state f)
+	(let ((num-states (vector-length states)))
+	  (let loop ((i 0))
+	    (if (< i num-states)
+		(begin
+		  (f (vector-ref states i))
+		  (loop (add1 i)))))))
+      
+      ;; run-automaton: kernel * gram-sym -> kernel | #f
+      ;; returns the state that the transition trans-key provides or #f
+      ;; if there is no such state
+      (define/public (run-automaton k s)
+	(if (term? s)
+	    (array2d-ref term-transitions (kernel-index k) (term-index s))
+	    (array2d-ref non-term-transitions (kernel-index k) (non-term-index s))))
+      
+      (define/public (run-automaton-back k s)
+	(apply append
+	       (if (term? s)
+		   (map (lambda (k)
+			  (array2d-ref reverse-term-transitions (kernel-index k) (term-index s)))
+			k)
+		   (map (lambda (k)
+			  (array2d-ref reverse-non-term-transitions (kernel-index k) (non-term-index s)))
+			k))))))
+  
+  (define (make-lr0-table auto-hash states syms)
+    (let ((t (make-array2d states syms #f)))
+      (hash-table-map auto-hash
+                      (lambda (k v)
+                        (array2d-set! t 
+                                      (kernel-index (trans-key-st k))
+                                      (gram-sym-index (trans-key-gs k))
+                                      v)))
+      t))
+  
+  (define (reverse-hash hash)
+    (let ((reverse-hash (make-hash-table 'equal))
+	  (hash-table-add!
+	   (lambda (ht k v)
+	     (hash-table-put! ht k (cons v (hash-table-get ht k (lambda () null)))))))
+      (hash-table-for-each hash
+			   (lambda (k v)
+			     (hash-table-add! reverse-hash 
+					      (make-trans-key v (trans-key-gs k))
+					      (trans-key-st k))))
+      reverse-hash))
+
+			
   (define (union comp<?)
     (letrec ((union
 	      (lambda (l1 l2)
@@ -28,26 +133,7 @@
 			  (else (union (cdr l1) l2)))))))))
       union))
   
-  ;; kernel = (make-kernel (LR1-item list) index)
-  ;;   the list must be kept sorted according to item<? so that equal? can
-  ;;   be used to compare kernels
-  ;; LR0-automaton = (make-lr0 (kernel array2d) (kernel array2d) (trans-key list) (kernel vector) (kernel item hashtable))
-  ;; trans-key = (make-trans-key kernel gram-sym)
-  (define-struct kernel (items index) (make-inspector))
-  (define-struct trans-key (st gs) (make-inspector))
-  (define-struct lr0 (term-transitions non-term-transitions mapped-non-terms states epsilon-trans) (make-inspector))
 
-  
-  ;; Iteration over the states in an automaton
-  (define (for-each-state f a)
-    (let* ((states (lr0-states a))
-	   (num-states (vector-length states)))
-      (let loop ((i 0))
-	(if (< i num-states)
-	    (begin
-	      (f (vector-ref states i))
-	      (loop (add1 i)))))))
- 
   ;; The kernels in the automaton are represented cannonically.
   ;; That is (equal? a b) <=> (eq? a b)
   (define (kernel->string k)
@@ -56,16 +142,7 @@
 			(kernel-items k)) 
 	     "}")))
 
-  ;; run-automaton: kernel * gram-sym * LR0-automaton -> kernel | #f
-  ;; returns the state that the transition trans-key provides or #f
-  ;; if there is no such state
-  (define (run-automaton k s a)
-    (if (term? s)
-        (array2d-ref (lr0-term-transitions a) (kernel-index k) (term-index s))
-        (array2d-ref (lr0-non-term-transitions a) (kernel-index k) (non-term-index s))))
 
-  (define get-mapped-lr0-non-term-keys lr0-mapped-non-terms)
-  
   (define (add-lr0-transition! ttable nttable key value)
     (hash-table-put!
      (if (term? (trans-key-gs key))
@@ -73,17 +150,7 @@
          nttable)
      key
      value))
-
-  (define (make-lr0-table auto-hash states syms)
-    (let ((t (make-array2d states syms #f)))
-      (hash-table-map auto-hash
-                      (lambda (k v)
-                        (array2d-set! t 
-                                      (kernel-index (trans-key-st k))
-                                      (gram-sym-index (trans-key-gs k))
-                                      v)))
-      t))
-  
+		      
   
   ;; build-LR0-automaton: grammar -> LR0-automaton
   ;; Constructs the kernels of the sets of LR(0) items of g
@@ -263,11 +330,13 @@
 		 (seen-kernels null))
 	(cond
 	 ((and (empty-queue? new-kernels) (null? old-kernels))
-	  (make-lr0 (make-lr0-table automaton-term (length seen-kernels) (vector-length terms))
-                    (make-lr0-table automaton-non-term (length seen-kernels) (vector-length non-terms))
-                    (hash-table-map automaton-non-term (lambda (k v) k))
-                    (list->vector (reverse! seen-kernels)) 
-                    epsilons))
+	  (make-object lr0% 
+		       automaton-term
+		       automaton-non-term		       
+		       (list->vector (reverse! seen-kernels))
+		       epsilons
+		       (vector-length terms)
+		       num-non-terms))
 	 ((null? old-kernels)
 	  (loop (deq! new-kernels) seen-kernels))
 	 (else 

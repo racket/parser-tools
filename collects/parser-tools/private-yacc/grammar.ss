@@ -15,7 +15,7 @@
    
    ;; Things that work on items
    start-item? item-prod item->string 
-   sym-at-dot move-dot-right item<? nullable-after-dot?
+   sym-at-dot move-dot-right move-dot-right! item<? nullable-after-dot?
 
    ;; Things that operate on grammar symbols
    gram-sym-symbol gram-sym-index term-prec gram-sym->string
@@ -72,28 +72,39 @@
      (else (make-item (item-prod i)
 		      (add1 (item-dot-pos i))
 		      (item-n i)))))
-  
+
+  ;; move-dot-right!: LR-item -> LR-item | #f
+  ;; moves the dot to the right in the item, unless it is at its 
+  ;; rightmost, then it returns false
+  (define (move-dot-right! i)
+    (cond
+     ((= (item-dot-pos i) (vector-length (prod-rhs (item-prod i)))) #f)
+     (else (set-item-dot-pos! i (add1 (item-dot-pos i)))
+	   i)))
+
   ;; sym-at-dot: LR-item -> gram-sym | #f
   ;; returns the symbol after the dot in the item or #f if there is none  
   (define (sym-at-dot i)
-    (cond
-     ((= (item-dot-pos i) (vector-length (prod-rhs (item-prod i)))) #f)
-     (else (vector-ref (prod-rhs (item-prod i)) (item-dot-pos i)))))
+    (let ((dp (item-dot-pos i)))
+      (cond
+       ((= dp (vector-length (prod-rhs (item-prod i)))) #f)
+       (else (vector-ref (prod-rhs (item-prod i)) dp)))))
   
   ;; nullable-after-dot?: LR1-iten * grammar -> bool
   ;; determines if the string after the dot is nullable
   (define (nullable-after-dot? i g)
-    (cond
-     ((item-n i) => (lambda (x) (>= (item-dot-pos i) x)))
-     (else
-      (let ((str (prod-rhs (item-prod i))))
-	(let loop ((c (sub1 (vector-length str))))
-	  (cond
-	   ((= c -1) (set-item-n! i 0))
-	   ((term? (vector-ref str c)) (set-item-n! i (add1 c)))
-	   ((nullable? g (vector-ref str c)) (loop (sub1 c)))
-	   (else (set-item-n! i (add1 c))))))
-      (>= (item-dot-pos i) (item-n i)))))
+    (let ((i-n (item-n i)))
+      (cond
+       (i-n (>= (item-dot-pos i) i-n))
+       (else
+	(let ((str (prod-rhs (item-prod i))))
+	  (let loop ((c (sub1 (vector-length str))))
+	    (cond
+	     ((= c -1) (set-item-n! i 0))
+	     ((term? (vector-ref str c)) (set-item-n! i (add1 c)))
+	     ((nullable? g (vector-ref str c)) (loop (sub1 c)))
+	     (else (set-item-n! i (add1 c))))))
+	(>= (item-dot-pos i) (item-n i))))))
 	
 
   ;; print-item: LR-item ->
