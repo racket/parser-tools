@@ -6,6 +6,7 @@
   (require "private-yacc/array2d.ss"
            "private-lex/token.ss"
            "private-yacc/parser-actions.ss"
+           (lib "pretty.ss")
 	   (lib "readerr.ss" "syntax"))
   
   (provide parser)
@@ -149,6 +150,7 @@
            (with-syntax ((check-syntax-fix check-syntax-fix)
                          (err error)
                          (ends end)
+                         (debug debug)
                          (table table)
                          (term-sym->index term-sym->index)
                          (actions actions)
@@ -156,7 +158,7 @@
              (syntax
               (begin
                 check-syntax-fix
-                (parser-body err (quote ends) table term-sym->index actions src-pos)))))))
+                (parser-body debug err (quote ends) table term-sym->index actions src-pos)))))))
       (_
        (raise-syntax-error
         #f
@@ -187,7 +189,7 @@
   ;; an accept, shift or reduce structure - or a #f.  Except that we will encode
   ;; by changing (make-accept) -> 'accept, (make-shift i) -> i and
   ;; (make-reduce i1 i2 i3) -> #(i1 i2 i3)
-  (define (parser-body err ends table term-sym->index actions src-pos)
+  (define (parser-body debug err ends table term-sym->index actions src-pos)
     (letrec ((input->token
               (if src-pos
                   (lambda (ip)
@@ -214,7 +216,7 @@
              
              (fix-error
               (lambda (stack tok ip get-token)
-                ;;(printf "stack: ~a~n" stack)
+                (when debug (pretty-print stack))
                 (letrec ((remove-input
                           (lambda ()
                             (if (memq (token-name tok) ends)
