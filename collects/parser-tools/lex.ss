@@ -60,39 +60,28 @@
 						"expects regular expression / action pairs"
 						x))))
 		     (syntax->list (syntax (re-act ...))))
-                    (let* ((re-act-lst (syntax->list (syntax (re-act ...))))
-                           (spec-act (let loop ((lst re-act-lst))
-                                       (cond
-                                         ((null? lst)
-                                          #'(void))
-                                         (else
-                                          (syntax-case (car lst) ()
-                                            (((special) act)
-                                             (eq? (syntax-e (syntax special)) 'special)
-                                             (syntax act))
-                                            (_ (loop (cdr lst))))))))
-                           (re-act-lst (let loop ((lst re-act-lst))
-                                       (cond
-                                         ((null? lst)
-                                          null)
-                                         (else
-                                          (syntax-case (car lst) ()
-                                            (((special) act)
-                                             (eq? (syntax-e (syntax special)) 'special)
-                                             (loop (cdr lst)))
-                                            (_ (cons (car lst) (loop (cdr lst)))))))))
-                           (spec-act (datum->syntax-object
-                                      spec-act
-                                      `(lambda (start-pos end-pos lexeme return-without-pos input-port)
-                                         ,spec-act)
-                                      spec-act)))                                           
+                    (let* ((spec/re-act-lst (syntax->list (syntax (re-act ...))))
+                           (spec-act (get-special-action spec/re-act-lst 'special #'here))
+                           (spec-comment-act (get-special-action spec/re-act-lst 'special-comment #'here))
+                           (re-act-lst (filter-out-specials spec/re-act-lst '(special special-comment))))
                       (let ((table (generate-table re-act-lst stx)))
                         (with-syntax ((start-state-stx (table-start table))
                                       (trans-table-stx (table-trans table))
                                       (eof-table-stx (table-eof table))
                                       (no-lookahead-stx (table-no-lookahead table))
                                       (actions-stx `(vector ,@(vector->list (table-actions table))))
-                                      (spec-act-stx spec-act)
+                                      (spec-act-stx 
+                                       (datum->syntax-object
+                                        spec-act
+                                        `(lambda (start-pos end-pos special return-without-pos input-port)
+                                           ,spec-act)
+                                        spec-act))
+                                      (spec-comment-act-stx
+                                       (datum->syntax-object
+                                        spec-comment-act
+                                        `(lambda (start-pos end-pos ,(gensym) return-without-pos input-port)
+                                           ,spec-comment-act)
+                                        spec-comment-act))
                                       (wrap? wrap?))
                           (syntax 
                            (lexer-body start-state-stx 
@@ -101,6 +90,7 @@
                                        actions-stx
                                        no-lookahead-stx
                                        spec-act-stx
+                                       spec-comment-act-stx
                                        wrap?))))))))))))
       (values
        (build-lexer #f)
@@ -153,9 +143,10 @@
       (let ((first-pos (get-position ip)))
         (let-values (((longest-match-length length longest-match-action)
                       (lexer ip peek-string)))
-          (do-match ip first-pos longest-match-length length (vector-ref actions longest-match-action) wrap?)))))
+          (check-match ip first-pos longest-match-length length (vector-ref actions longest-match-action) wrap?)))))
   
-  (define (lexer-body start-state trans-table eof-table actions no-lookahead special-action wrap?)
+  (define (lexer-body start-state trans-table eof-table actions no-lookahead
+                      special-action special-comment-action wrap?)
     (lambda (ip)
       (unless (input-port? ip)
         (raise-type-error 
@@ -167,24 +158,14 @@
             (first-char (peek-char-or-special ip 0)))
         (cond
           ((eq? 'special first-char)
-           (let* ((val (read-char-or-special ip))
-                  (end-pos (get-position ip)))
-             (cond
-               (wrap?
-                (let/ec ret
-                  (list (special-action first-pos
-                                        end-pos
-                                        val
-                                        ret
-                                        ip)
-                        first-pos 
-                        end-pos)))
-               (else 
-                (special-action first-pos
-                                end-pos
-                                val
-                                id
-                                ip)))))
+           (let* ((comment? #f)
+                  (spec (with-handlers ((exn:special-comment?
+                                         (lambda (x) (set! comment? #t) #f)))
+                          (read-char-or-special ip))))
+             (do-match ip first-pos (if comment?
+                                        special-comment-action
+                                        special-action)
+                       spec wrap?)))
           (else
            (let lexer-loop (
                             ;; current-state
@@ -212,15 +193,15 @@
                         (+ (char->integer char) (* 256 state)))))))
                (cond
                  ((not next-state)
-                  (do-match ip first-pos longest-match-length length longest-match-action wrap?))
+                  (check-match ip first-pos longest-match-length length longest-match-action wrap?))
                  ((vector-ref no-lookahead next-state)
                   (let ((act (vector-ref actions next-state)))
-                    (do-match ip 
-                              first-pos 
-                              (if act length longest-match-length)
-                              length
-                              (if act act longest-match-action)
-                              wrap?)))
+                    (check-match ip 
+                                 first-pos 
+                                 (if act length longest-match-length)
+                                 length
+                                 (if act act longest-match-action)
+                                 wrap?)))
                  (else
                   (let ((act (vector-ref actions next-state)))
                     (lexer-loop next-state 
@@ -235,7 +216,7 @@
       
   (define id (lambda (x) x))
 
-  (define (do-match lb first-pos longest-match-length length longest-match-action wrap?)
+  (define (check-match lb first-pos longest-match-length length longest-match-action wrap?)
     (unless longest-match-action
       (let* ((match (read-string length lb))
 	     (end-pos (get-position lb)))
@@ -246,27 +227,20 @@
 	 (position-col first-pos)
 	 (position-offset first-pos)
 	 (- (position-offset end-pos) (position-offset first-pos)))))
-    (let* ((match (read-string longest-match-length lb))
-	   (end-pos (get-position lb)))
+    (let ((match (read-string longest-match-length lb)))
+      (do-match lb first-pos longest-match-action match wrap?)))
+      
+      
+  (define (do-match ip first-pos action value wrap?)
+    (let ((end-pos (get-position ip)))
       (cond
-       (wrap?
-	(let/ec ret
-	  (list (longest-match-action
-		 first-pos
-		 end-pos
-		 match
-		 ret
-		 lb) 
-		first-pos 
-		end-pos)))
-       (else 
-	(longest-match-action
-	 first-pos
-	 end-pos
-	 match
-	 id
-	 lb)))))
-  
+        (wrap?
+         (let/ec ret
+           (list (action first-pos end-pos value ret ip)
+                 first-pos 
+                 end-pos)))
+        (else 
+         (action first-pos end-pos value id ip)))))
   
   (define-struct position (offset line col))
   (define (get-position ip)
