@@ -9,16 +9,14 @@
 
   (define-struct token (name value) (make-inspector))
 
-  (define-syntax define-tokens
-    (lambda (stx)
-      (syntax-case stx ()
-	((_ name ...)
-	 (define-tokens-helper stx #'hack #f)))))
+  (define-syntax (define-tokens stx)
+    (syntax-case stx ()
+      ((_ name ...)
+       (define-tokens-helper stx #'here #f))))
   
-  (define-syntax define-empty-tokens
-    (lambda (stx)
-      (syntax-case stx ()
-	((_ name ...)
-	 (define-tokens-helper stx #'hack #t)))))
+  (define-syntax (define-empty-tokens stx)
+    (syntax-case stx ()
+      ((_ name ...)
+       (define-tokens-helper stx #'here #t))))
 )
 
