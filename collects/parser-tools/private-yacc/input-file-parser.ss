@@ -13,14 +13,14 @@
     (let loop ((i 1))
       (cond
         ((> i x) null)
-        (else 
-         (if src-pos
-             `(,(datum->syntax-object act (string->symbol (format "$~a" i)))
-               ,(datum->syntax-object act (string->symbol (format "$~a-start-pos" i)))
-               ,(datum->syntax-object act (string->symbol (format "$~a-end-pos" i)))
-               ,@(loop (add1 i)))
-             `(,(datum->syntax-object act (string->symbol (format "$~a" i)))
-               ,@(loop (add1 i))))))))
+        (src-pos
+         `(,(datum->syntax-object act (string->symbol (format "$~a" i)))
+           ,(datum->syntax-object act (string->symbol (format "$~a-start-pos" i)))
+           ,(datum->syntax-object act (string->symbol (format "$~a-end-pos" i)))
+           ,@(loop (add1 i))))
+        (else
+         `(,(datum->syntax-object act (string->symbol (format "$~a" i)))
+           ,@(loop (add1 i)))))))
     
   ;; nullable: production list * int -> non-term set
   ;; determines which non-terminals can derive epsilon
