@@ -52,7 +52,7 @@
         ((_ name (token ...))
          (andmap identifier? (syntax->list (syntax (token ...))))
          (with-syntax (((marked-token ...)
-                        (map (make-syntax-introducer)
+                        (map values #;(make-syntax-introducer)
                              (syntax->list (syntax (token ...))))))
            (quasisyntax/loc stx
              (begin
@@ -73,7 +73,7 @@
                          #`(define (#,(make-ctor-name n) x)
                              (make-token '#,n x))))
                    (syntax->list (syntax (token ...))))
-               (define marked-token #f) ...))))
+               #;(define marked-token #f) #;...))))
         ((_ ...)
          (raise-syntax-error 
           #f

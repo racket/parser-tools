@@ -31,7 +31,8 @@
             (syntax-case prods ()
               (((_ rhs ...) ...)
                (syntax->list (syntax (rhs ... ...)))))))
-      (with-syntax (((term-group ...)
+      (with-syntax (((tmp ...) (map syntax-local-introduce term-binders))
+                    ((term-group ...)
                      (map (lambda (tg)
                             (syntax-property
                              (datum->syntax-object tg #f)
@@ -66,7 +67,7 @@
                                  (syntax->list (syntax (term ... ...))))))
                          null)))
         #`(when #f
-            (let ((bind void) ...)
+            (let ((bind void) ... (tmp void) ...)
               (void bound ... ... term-group ... start ... end ... prec ...))))))
   
   (define (build-parser filename src-pos suppress input-terms start end assocs prods)
