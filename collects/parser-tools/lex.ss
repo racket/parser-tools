@@ -33,8 +33,6 @@
            ;; A regular expression operator
            char-set)
   
-  (define file-path (make-parameter #f))
-             
   ;; wrap-action: syntax-object src-pos? -> syntax-object
   (define-for-syntax (wrap-action action src-pos?)
     (with-syntax ((action-stx 
@@ -90,17 +88,25 @@
                                    (module-or-top-identifier=? (syntax special) x))
                                  ids)))
                         (_ #t)))
-                    spec/re-act-lst)))
-             (let-values (((trans start actions no-look disappeared-uses)
-                           (build-lexer re-act-lst)))
+                    spec/re-act-lst))
+		  (name-lst (map (lambda (x) (datum->syntax-object #f (gensym))) re-act-lst))
+		  (act-lst (map (lambda (x) (stx-car (stx-cdr x))) re-act-lst))
+		  (re-actname-lst (map (lambda (re-act name)
+					 (list (stx-car re-act)
+					       name))
+				       re-act-lst
+				       name-lst)))
+             (let-values (((trans start action-names no-look disappeared-uses)
+                           (build-lexer re-actname-lst)))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
                              (no-lookahead-stx no-look)
-                             (actions-stx
-                              `(vector ,@(map (lambda (a)
-                                                (if a (wrap-action a src-pos?) #f))
-                                              (vector->list actions))))
-                             (spec-act-stx
+			     ((name ...) name-lst)
+			     ((act ...) (map (lambda (a)
+					       (wrap-action a src-pos?))
+					     act-lst))
+			     ((act-name ...) (vector->list action-names))
+			     (spec-act-stx
                               (wrap-action spec-act src-pos?))
                              (spec-error-act-stx
                               (wrap-action spec-error-act src-pos?))
@@ -111,15 +117,16 @@
                              (eof-act-stx (wrap-action eof-act src-pos?)))
                  (syntax-property
                   (syntax/loc stx
-                   (lexer-body start-state-stx 
-                               trans-table-stx
-                               actions-stx
-                               no-lookahead-stx
-                               spec-act-stx
-                               spec-error-act-stx
-                               has-comment-act?-stx
-                               spec-comment-act-stx
-                               eof-act-stx))
+		    (let ([name act] ...)
+		      (lexer-body start-state-stx 
+				  trans-table-stx
+				  (vector act-name ...)
+				  no-lookahead-stx
+				  spec-act-stx
+				  spec-error-act-stx
+				  has-comment-act?-stx
+				  spec-comment-act-stx
+				  eof-act-stx)))
                   'disappeared-use
                   disappeared-uses)))))))))
 
@@ -300,7 +307,8 @@
       ;(printf "(read-string ~e port) = ~e~n" longest-match-length match)
       (do-match lb first-pos longest-match-action match)))
       
-      
+  (define file-path (make-parameter #f))
+                   
   (define (do-match ip first-pos action value)
     #;(printf "(action ~a ~a ~a ~a)~n" 
             (position-offset first-pos) (position-offset (get-position ip)) value ip)

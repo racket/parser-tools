@@ -1,6 +1,7 @@
 (module front mzscheme
   (require (prefix is: (lib "integer-set.ss"))
            (lib "list.ss")
+	   (lib "stx.ss" "syntax")
            "util.ss"
            "stx.ss"
            "re.ss"
@@ -132,8 +133,8 @@
   (define (build-lexer sos)
     (let* ((disappeared-uses (box null))
            (s-re-acts (map (lambda (so)
-                             (cons (parse (car (syntax->list so)) disappeared-uses)
-                                   (cadr (syntax->list so))))
+                             (cons (parse (stx-car so) disappeared-uses)
+				   (stx-car (stx-cdr so))))
                            sos))
 
            (cache (make-cache))
