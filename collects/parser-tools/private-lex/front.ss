@@ -97,5 +97,6 @@
            
            (dfa (build-dfa re-acts cache)))
       ;(print-dfa dfa)
+      ;(printf "states: ~a~n" (dfa-num-states dfa))
       (dfa->table dfa)))
   )
