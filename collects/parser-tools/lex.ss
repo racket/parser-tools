@@ -205,7 +205,7 @@
               (lambda (ip)
                 (let ((first-pos (get-position ip))
                       (first-char (peek-char-or-special ip 0)))
-                  ;; (printf "(peek-char-or-special port 0) = ~e~n" first-char)
+                  ;(printf "(peek-char-or-special port 0) = ~e~n" first-char)
                   (cond
                     ((eof-object? first-char)
                      (do-match ip first-pos eof-action (read-char-or-special ip)))
@@ -236,13 +236,13 @@
                                       ;; including a match at the current state
                                       (longest-match-action 
                                        (vector-ref actions start-state))
+                                      ;; how many bytes preceed char
+                                      (length-bytes 0)
                                       ;; how many characters have been read
                                       ;; including the one just read
-                                      (length-bytes (char-utf-8-length first-char))
                                       (length-chars 1)
                                       ;; how many characters are in the longest match
                                       (longest-match-length 1))
-                       ;; (printf "(peek-char-or-special port ~e) = ~e~n" (sub1 length-bytes) char)
                        (let ((next-state 
                               (cond
                                 ((eof-object? char) #f)
@@ -261,13 +261,17 @@
                                            length-chars
                                            (if act act longest-match-action))))
                            (else
-                            (let ((act (vector-ref actions next-state)))
+                            (let* ((act (vector-ref actions next-state))
+                                   (next-length-bytes (+ (char-utf-8-length char) length-bytes))
+                                   (next-char (peek-char-or-special ip next-length-bytes)))
+                              #;(printf "(peek-char-or-special port ~e) = ~e~n"
+                                      next-length-bytes next-char)
                               (lexer-loop next-state 
-                                          (peek-char-or-special ip length-bytes)
+                                          next-char
                                           (if act
                                               act
                                               longest-match-action)
-                                          (+ (char-utf-8-length char) length-bytes)
+                                          next-length-bytes
                                           (add1 length-chars)
                                           (if act
                                               length-chars
@@ -293,7 +297,7 @@
 	 (position-offset first-pos)
 	 (- (position-offset end-pos) (position-offset first-pos)))))
     (let ((match (read-string longest-match-length lb)))
-      ;; (printf "(read-string ~e port) = ~e~n" longest-match-length match)
+      ;(printf "(read-string ~e port) = ~e~n" longest-match-length match)
       (do-match lb first-pos longest-match-action match)))
       
       
