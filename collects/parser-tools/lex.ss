@@ -154,21 +154,17 @@
 		(cond
 		 ((= 0 num-to-add) (values from to))
 		 (else
-		  (cond
-		   ((eq? #\newline (car from))
-		    (set-lex-buffer-line! 
-		     lb
-		     (sub1 (lex-buffer-line lb)))
-		    (set-lex-buffer-offset!
-		     lb
-		     (car (lex-buffer-line-lengths lb)))
-		    (set-lex-buffer-line-lengths!
-		     lb
-		     (cdr (lex-buffer-line-lengths lb))))
-		   (else
-		    (set-lex-buffer-offset! 
-		     lb 
-		     (sub1 (lex-buffer-offset lb)))))
+		  (if (eq? #\newline (car from))
+		      (begin
+			(set-lex-buffer-line! 
+			 lb
+			 (sub1 (lex-buffer-line lb)))
+			(set-lex-buffer-offset!
+			 lb
+			 (car (lex-buffer-line-lengths lb)))
+			(set-lex-buffer-line-lengths!
+			 lb
+			 (cdr (lex-buffer-line-lengths lb)))))
 		  (switch-buffers (cdr from) 
 				  (cons (car from) to) 
 				  (sub1 num-to-add)))))))
