@@ -85,7 +85,7 @@
 	    (not (andmap (lambda (x) (>= x 0)) offsets)))
 	(raise-type-error 'make-lex-buf "list of 3 non-negative exact integers" 1 ip offsets))
        (else
-	(make-lex-buffer ip null null (caddr offsets) (car offsets) (cadr offsets) null null))))))
+	(make-lex-buffer ip null null (add1 (caddr offsets)) (add1 (car offsets)) (add1 (cadr offsets)) null null))))))
 
   (define (get-next lb)
     (cond

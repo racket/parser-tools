@@ -1,32 +1,46 @@
+;; This implements the equivalent of mzscheme's read-syntax for R5RS scheme.
+;; It has not been thoroughly tested.  Also it will read an entire file into a 
+;; list of syntax objects
+
+ ;; Everything in this module will be read with case sensitivity.
 #cs
 (module read mzscheme
 
   (require (lib "lex.ss" "parser-tools")
-           (lib "util.ss" "parser-tools"))
-
+           (lib "yacc.ss" "parser-tools")
+           (lib "readerr.ss" "syntax"))
+  
+  (define-tokens data (DATUM))
+  (define-empty-tokens delim (OP CP HASHOP QUOTE QUASI-QUOTE UNQUOTE UNQUOTE-SPLICING DOT EOF))
+  
   (define scheme-lexer
-    (lexer
-     [(: (whitespace) (comment)) (scheme-lexer lex-buf)]
-     ["#t" #t]
-     ["#f" #f]
-     [(@ "#\\" (any)) (caddr (string->list (get-lexeme)))]
-     ["#\\space" #\space]
-     ["#\\newline" #\newline]
-     [(: (@ (initial) (* (subsequent))) + - "...") (string->symbol (get-lexeme))]
-     [#\" (list->string (get-string-token lex-buf))]
-     [#\( (make-OPEN-LIST)]
-     [#\) (make-CLOSE)]
-     ["#(" (make-OPEN-VECTOR)]
-     [(num2) (string->number (get-lexeme) 2)]
-     [(num8) (string->number (get-lexeme) 8)]
-     [(num10) (string->number (get-lexeme) 10)]
-     [(num16) (string->number (get-lexeme) 16)]
-     ["'" (make-QUOTE)]
-     ["`" (make-QUASI-QUOTE)]
-     ["," (make-UNQUOTE)]
-     [",@" (make-UNQUOTE-SPLICING)]
-     ["." (make-DOT)]
-     [(eof) eof]))
+    (lexer-src-pos
+     
+     ;; Skip comments, without accumulating extra position information
+     [(: (whitespace) (comment)) (return-without-pos (scheme-lexer lex-buf))]
+
+     ["#t" (token-DATUM #t)]
+     ["#f" (token-DATUM #f)]
+     [(@ "#\\" (any)) (token-DATUM (caddr (string->list (get-lexeme))))]
+     ["#\\space" (token-DATUM #\space)]
+     ["#\\newline" (token-DATUM #\newline)]
+     [(: (@ (initial) (* (subsequent))) + - "...") (token-DATUM (string->symbol (get-lexeme)))]
+     [#\" (token-DATUM (list->string (get-string-token lex-buf)))]
+     [#\( 'OP]
+     [#\) 'CP]
+     [#\[ 'OP]
+     [#\] 'CP]
+     ["#(" 'HASHOP]
+     [(num2) (token-DATUM (string->number (get-lexeme) 2))]
+     [(num8) (token-DATUM (string->number (get-lexeme) 8))]
+     [(num10) (token-DATUM (string->number (get-lexeme) 10))]
+     [(num16) (token-DATUM (string->number (get-lexeme) 16))]
+     ["'" 'QUOTE]
+     ["`" 'QUASI-QUOTE]
+     ["," 'UNQUOTE]
+     [",@" 'UNQUOTE-SPLICING]
+     ["." 'DOT]
+     [(eof) 'EOF]))
    
   (define get-string-token
     (lexer
@@ -38,6 +52,10 @@
   
   
   (define-lex-abbrevs
+   [any (- #\000 #\377)]
+   [letter (: (- a z) (- A Z))]
+   [digit (- #\0 #\9)]
+   [whitespace (: #\newline #\return #\tab #\space #\vtab)]
    [initial (: (letter) ! $ % & * / : < = > ? ^ _ ~)]
    [subsequent (: (initial) (digit) + - #\. @)]
    [comment (@ #\; (* (^ #\newline)) #\newline)]
@@ -146,74 +164,83 @@
    [suffix (: (@) (@ (exponent-marker) (sign) (+ (digit10))))]
    [exponent-marker (: e s f d l)]
    [sign (: (@) + -)]
-   [exactness (: (@) "#i" "#e")]
-   )
-   
+   [exactness (: (@) "#i" "#e")])
 
-  (define r (build-reader scheme-lexer))
-  (provide r)
-
-  (define (compare s1 s2)
-    (for-each (lambda (x y)
-		(if (not (equal? x y))
-		    (printf "~a~n~n~a" x y)))
-	      s1 s2))
   
-  (define (read-all read)
-    (lambda (ip)
-      (let ((r (read ip)))
-	(cond
-	 ((eof-object? r)
-	  null)
-	 (else
-	  (cons r ((read-all read) ip)))))))
-
-  (define (lex-all lexer)
-    (lambda (in)
-      (let ((lb (make-lex-buf in)))
-	(let loop ((t (lexer lb)))
-	  (if (not (eof-object? t))
-	      (loop (lexer lb)))))))
-
-
-  (require (lib "list.ss"))
-  (define files (filter (lambda (x) 
-			(string=? ".scm"
-				  (substring x 
-					     (- (string-length x) 4)
-					     (string-length x))))
-		      (directory-list)))
-  (define (test)
-    (printf "just lexing~n")
-    (time
-     (map (lambda (x)
-	    (display x)
-	    (newline)
-	    (call-with-input-file x (lex-all scheme-lexer)))
-	  files))
-    #|
-    (printf "reading~n")
-    (time
-     (map (lambda (x) 
-	    (display x)
-	    (newline)
-	    (call-with-input-file x (read-all r)))
-	  files))
-    (printf "builtin read~n")
-    (time
-     (map (lambda (x) 
-	    (display x)
-	    (newline)
-	    (call-with-input-file x (read-all read)))
-	  files))
-    (printf "testing~n")
-    (for-each (lambda (x)
-		(display x)
-		(newline)
-		(compare (call-with-input-file x (read-all read ))
-			 (call-with-input-file x (read-all r))))
-	      files)|#)
+  (define stx-for-original-property (read-syntax #f (open-input-string "original")))
   
-  (provide test)
+  ;; A macro to build the syntax object
+  (define-syntax (build-so stx)
+    (syntax-case stx ()
+      ((_ value start end)
+       (with-syntax ((start-pos (datum->syntax-object 
+                                 (syntax end)
+                                 (string->symbol 
+                                  (format "$~a-start-pos"
+                                          (syntax-object->datum (syntax start))))))
+                     (end-pos (datum->syntax-object 
+                               (syntax end)
+                               (string->symbol 
+                                (format "$~a-end-pos"
+                                        (syntax-object->datum (syntax end))))))
+                     (source (datum->syntax-object
+                              (syntax end)
+                              'source-name)))
+         (syntax
+          (datum->syntax-object 
+           #f
+           value
+           (list source 
+                 (position-line start-pos)
+                 (position-col start-pos)
+                 (position-offset start-pos)
+                 (- (position-offset end-pos)
+                    (position-offset start-pos)))
+           stx-for-original-property))))))
+  
+  (define (scheme-parser source-name)
+    (parser
+     (src-pos)
 
+     (start s)
+     (end EOF)
+     (error (lambda (a name val start end)
+              (raise-read-error 
+               "read-error"
+               source-name
+               (position-line start)
+               (position-col start)
+               (position-offset start)
+               (- (position-offset end)
+                  (position-offset start)))))
+     (tokens data delim)
+     
+     
+     (grammar
+      
+      (s [(sexp-list) (reverse $1)])
+      
+      (sexp [(DATUM) (build-so $1 1 1)]
+            [(OP sexp-list CP) (build-so (reverse $2) 1 3)]
+            [(HASHOP sexp-list CP) (build-so (list->vector (reverse $2)) 1 3)]
+            [(QUOTE sexp) (build-so (list 'quote $2) 1 2)]
+            [(QUASI-QUOTE sexp) (build-so (list 'quasi-quote $2) 1 2)]
+            [(UNQUOTE sexp) (build-so (list 'unquote $2) 1 2)]
+            [(UNQUOTE-SPLICING sexp) (build-so (list 'unquote-splicing $2) 1 2)]
+            [(OP sexp-list DOT sexp CP) (build-so (append (reverse $2) $4) 1 5)])
+      
+      (sexp-list [() null]
+                 [(sexp-list sexp) (cons $2 $1)]))))
+  
+  (define (rs sn ip off)
+    (let ((lb (make-lex-buf ip off)))
+      ((scheme-parser sn) (lambda () (scheme-lexer lb)))))
+  
+  (define readsyntax
+    (case-lambda ((sn) (rs sn (current-input-port) (list 0 0 0)))
+                 ((sn ip) (rs sn ip (list 0 0 0)))
+                 ((sn ip off) (rs sn ip off))))
+
+  (provide (rename readsyntax read-syntax))
+                        
   )
