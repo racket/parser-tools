@@ -71,11 +71,9 @@
                    (get-special-action spec/re-act-lst #'eof #''eof))
                   (spec-act 
                    (get-special-action spec/re-act-lst #'special #'(void)))
-                  (spec-error-act
-                   (get-special-action spec/re-act-lst #'special-error #'(raise lexeme)))
                   (spec-comment-act 
                    (get-special-action spec/re-act-lst #'special-comment #'#f))
-                  (ids (list #'special #'special-comment #'special-error #'eof))
+                  (ids (list #'special #'special-comment #'eof))
                   (re-act-lst
                    (filter
                     (lambda (spec/re-act)
@@ -123,8 +121,6 @@
 			     ((act-name ...) (vector->list action-names))
 			     (spec-act-stx
                               (wrap-action spec-act src-pos?))
-                             (spec-error-act-stx
-                              (wrap-action spec-error-act src-pos?))
                              (has-comment-act?-stx 
                               (if (syntax-e spec-comment-act) #t #f))
                              (spec-comment-act-stx
@@ -138,7 +134,6 @@
 				  (vector act-name ...)
 				  no-lookahead-stx
 				  spec-act-stx
-				  spec-error-act-stx
 				  has-comment-act?-stx
 				  spec-comment-act-stx
 				  eof-act-stx)))
@@ -220,8 +215,7 @@
         (get-next-state-helper char 0 (vector-length table) table)
         #f))
   
-  (define (lexer-body start-state trans-table actions no-lookahead
-                      special-action special-error-action
+  (define (lexer-body start-state trans-table actions no-lookahead special-action
                       has-special-comment-action? special-comment-action eof-action)
     (letrec ((lexer
               (lambda (ip)
@@ -231,23 +225,15 @@
                   (cond
                     ((eof-object? first-char)
                      (do-match ip first-pos eof-action (read-char-or-special ip)))
+                    ((special-comment? first-char)
+                     (read-char-or-special ip)
+                     (cond
+                       (has-special-comment-action?
+                        (do-match ip first-pos special-comment-action #f))
+                       (else (lexer ip))))
                     ((not (char? first-char))
-                     (let* ((comment? #f)
-                            (error? #f)
-                            (spec (with-handlers ((special-comment?
-                                                   (lambda (x) (set! comment? #t)))
-                                                  (exn:fail?
-                                                   (lambda (ex) (set! error? #t) ex)))
-                                    (read-char-or-special ip))))
-                       (cond
-                         ((and comment? (not has-special-comment-action?))
-                          (lexer ip))
-                         (else
-                          (do-match ip first-pos (cond
-                                                   (comment? special-comment-action)
-                                                   (error? special-error-action)
-                                                   (else special-action))
-                                    spec)))))
+                     (let ((spec (read-char-or-special ip)))
+                       (do-match ip first-pos special-action (read-char-or-special ip))))
                     (else
                      (let lexer-loop (
                                       ;; current-state
@@ -267,7 +253,6 @@
                                       (longest-match-length 0))
                        (let ((next-state 
                               (cond
-                                ((eof-object? char) #f)
                                 ((not (char? char)) #f)
                                 (else (get-next-state (char->integer char)
                                                       (vector-ref trans-table state))))))
