@@ -8,7 +8,7 @@
            "../private-lex/token-syntax.ss"
            "grammar.ss"
            (lib "class.ss")
-           (lib "contracts.ss"))
+           (lib "contract.ss"))
   
 
   (provide/contract 

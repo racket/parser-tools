@@ -5,7 +5,7 @@
            "grammar.ss"
            "table.ss"
            (lib "class.ss")
-           (lib "contracts.ss"))
+           (lib "contract.ss"))
   
   (provide/contract
    (build-parser ((string? any? any? syntax? (listof syntax?) (listof syntax?)

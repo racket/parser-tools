@@ -7,7 +7,7 @@
   (require (lib "class.ss")
            (lib "list.ss")
            "yacc-helper.ss"
-           (lib "contracts.ss"))
+           (lib "contract.ss"))
   
   ;; Each production has a unique index 0 <= index <= number of productions
   (define-struct prod (lhs rhs index prec action) (make-inspector))
