@@ -41,11 +41,11 @@
       (syntax/loc action
         (lambda (start-pos-p end-pos-p lexeme-p return-without-pos-p input-port-p)
           (syntax-parameterize 
-           ((start-pos (lambda (x) #'start-pos-p))
-            (end-pos (lambda (x) #'end-pos-p))
-            (lexeme (lambda (x) #'lexeme-p))
-            (return-without-pos (lambda (x) #'return-without-pos-p))
-            (input-port (lambda (x) #'input-port-p)))
+           ((start-pos (make-rename-transformer #'start-pos-p))
+            (end-pos (make-rename-transformer #'end-pos-p))
+            (lexeme (make-rename-transformer #'lexeme-p))
+            (return-without-pos (make-rename-transformer #'return-without-pos-p))
+            (input-port (make-rename-transformer #'input-port-p)))
            action-stx)))))
         
   (define-for-syntax (make-lexer-trans wrap?)
