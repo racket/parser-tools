@@ -8,6 +8,20 @@
   
   (provide build-parser)
   
+  (define (fix-check-syntax start terms prods)
+    (syntax-case prods ()
+      ((_ (bind ((bound ...) x ...) ...) ...)
+       (let ((binds (syntax->list (syntax (bind ...))))
+             (bounds (cons start 
+                           (apply append (map syntax->list 
+                                              (apply append (map syntax->list 
+                                                                 (syntax->list (syntax (((bound ...) ...) ...)))))))))
+             (terms (get-term-list terms)))
+         `(if #f (let ,(map (lambda (bind)
+                              `(,bind void))
+                            (append terms binds))
+                   (void ,@bounds)))))))
+  
   (define (build-parser filename src-pos suppress error-expr input-terms start end assocs prods runtime src)
     (let* ((grammar (parse-input start end input-terms assocs prods runtime src-pos))
            (table (build-table grammar filename suppress))
@@ -195,5 +209,5 @@
                                #f #f #f #f #f)))))))))))
       (datum->syntax-object
        runtime
-       parser-code
+       `(begin #|,(fix-check-syntax start input-terms prods)|# ,parser-code)
        src))))

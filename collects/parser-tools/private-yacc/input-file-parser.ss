@@ -6,7 +6,7 @@
   
   (require "yacc-helper.ss" "../private-lex/token-syntax.ss" "grammar.ss" (lib "list.ss"))
 
-  (provide parse-input)
+  (provide parse-input get-term-list)
 
   ;; get-args: num * syntax-object -> syntax-object list
   (define (get-args x act src-pos)
@@ -110,36 +110,38 @@
   (define (get-terms-from-def term-syn)
     (let ((t (syntax-local-value term-syn (lambda () #f))))
       (cond
-       ((terminals-def? t) (terminals-def-t t))
+       ((terminals-def? t) (syntax->list (terminals-def-t t)))
        (else
 	(raise-syntax-error 
          'parser-tokens
          "undefined token group"
          term-syn)))))
+
+  ;; get-term-list: syntax-object -> syntax-object list
+  (define (get-term-list so)
+    (syntax-case* so (tokens)
+      (lambda (a b)
+        (eq? (syntax-object->datum a) (syntax-object->datum b)))
+      ((tokens term-def ...)
+       (andmap identifier? (syntax->list (syntax (term-def ...))))
+       (remove-duplicates
+        (cons (datum->syntax-object #f 'error)
+              (apply append
+                     (map get-terms-from-def 
+                          (syntax->list (syntax (term-def ...))))))))
+      (_
+       (raise-syntax-error
+        'parser-tokens
+        "Token declaration must be (tokens symbol ...)"
+        so))))
   
   ;; parse-input: syntax-object * syntax-object list * syntax-object^4 * boolean-> grammar
   (define (parse-input start ends term-defs prec-decls prods runtime src-pos)
     (let* ((counter 0)
            
            (start-sym (syntax-object->datum start))
-                          
-           
-           (list-of-terms
-            (syntax-case* term-defs (tokens)
-              (lambda (a b)
-                (eq? (syntax-object->datum a) (syntax-object->datum b)))
-              ((tokens term-def ...)
-               (andmap identifier? (syntax->list (syntax (term-def ...))))
-               (remove-duplicates
-                (cons 'error
-                      (apply append
-                             (map get-terms-from-def 
-                                  (syntax->list (syntax (term-def ...))))))))
-              (_
-               (raise-syntax-error
-                'parser-tokens
-                "Token declaration must be (tokens symbol ...)"
-                term-defs))))
+
+           (list-of-terms (map syntax-object->datum (get-term-list term-defs)))
 
            (end-terms
             (map

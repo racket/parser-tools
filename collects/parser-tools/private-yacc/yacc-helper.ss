@@ -27,8 +27,10 @@
 		      (hash-table-put! t (car l) (car l))
 		      (dl? (cdr l)))))))
       (dl? l)))
-		
-  ;; remove-duplicates: symbol list -> symbol list
+
+  (require (lib "pretty.ss"))
+  
+  ;; remove-duplicates: syntax-object list -> syntax-object list
   ;; removes the duplicates from the lists
   (define (remove-duplicates sl)
     (let ((t (make-hash-table)))
@@ -36,10 +38,10 @@
 		(lambda (sl)
 		  (cond
 		   ((null? sl) sl)
-		   ((hash-table-get t (car sl) (lambda () #f))
+		   ((hash-table-get t (syntax-object->datum (car sl)) (lambda () #f))
 		    (x (cdr sl)))
 		   (else 
-		    (hash-table-put! t (car sl) #t)
+		    (hash-table-put! t (syntax-object->datum (car sl)) #t)
 		    (cons (car sl) (x (cdr sl))))))))
 	(x sl))))
 

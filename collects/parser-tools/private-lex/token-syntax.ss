@@ -15,7 +15,7 @@
 	runtime
 	`(begin
 	   (define-syntax ,(syntax name)
-	     (make-terminals-def ',(syntax (terms ...))))
+	     (make-terminals-def (quote-syntax ,(syntax (terms ...)))))
 	   ,@(map
 	      (lambda (n)
                 (if (eq? (syntax-object->datum n) 'error)
