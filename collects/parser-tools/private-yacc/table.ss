@@ -39,11 +39,9 @@
   ;;   action array2d * term vector * non-term vector * kernel vector * 
   ;;     output-port ->
   ;; Prints out the parser given by table.
-  (define (display-parser table terms non-terms states prods port)
+  (define (display-parser a table terms non-terms prods port)
     (let* ((num-terms (vector-length terms))
 	   (num-non-terms (vector-length non-terms))
-	   (num-gram-syms (+ num-terms num-non-terms))
-	   (num-states (vector-length states))
 	   (SR-conflicts 0)
 	   (RR-conflicts 0))
       (for-each
@@ -54,62 +52,62 @@
                   (gram-sym-symbol (prod-lhs prod))
                   (map gram-sym-symbol (vector->list (prod-rhs prod)))))
        prods)
-      (let loop ((i 0))
-	(if (< i num-states)
-	    (begin
-	      (fprintf port "State ~a~n" i)
-	      (for-each (lambda (item)
-			  (fprintf port "\t~a~n" (item->string item)))
-			(kernel-items (vector-ref states i)))
-	      (newline port)
-	      (let loop ((j 0))
-		(if (< j num-terms)
-		    (begin
-		      (let ((act (array2d-ref 
-				  table 
-				  i
-				  (+ j num-non-terms))))
-			(cond
-			 ((list? act) 
-			  (fprintf port "begin conflict:~n")
-			  (if (> (count reduce? act) 1)
-			      (set! RR-conflicts (add1 RR-conflicts)))
-			  (if (> (count shift? act) 0)
-			      (set! SR-conflicts (add1 SR-conflicts)))
-			  (map (lambda (x) 
-				 (print-entry 
-				  (gram-sym-symbol (vector-ref terms j))
-				  x
-				  port))
-			       act)
-			  (fprintf port "end conflict~n"))
-			 (act (print-entry
-			       (gram-sym-symbol (vector-ref terms j))
-			       act
-			       port))))
-		      (loop (add1 j)))))
-	      
-	      (newline port)
+      (for-each-state
+       (lambda (state)
+         (fprintf port "State ~a~n" (kernel-index state))
+         (for-each (lambda (item)
+                     (fprintf port "\t~a~n" (item->string item)))
+                   (kernel-items state))
+         (newline port)
+         (let loop ((j 0))
+           (if (< j num-terms)
+               (begin
+                 (let ((act (array2d-ref 
+                             table 
+                             (kernel-index state)
+                             (+ j num-non-terms))))
+                   (cond
+                     ((list? act) 
+                      (fprintf port "begin conflict:~n")
+                      (if (> (count reduce? act) 1)
+                          (set! RR-conflicts (add1 RR-conflicts)))
+                      (if (> (count shift? act) 0)
+                          (set! SR-conflicts (add1 SR-conflicts)))
+                      (map (lambda (x) 
+                             (print-entry 
+                              (gram-sym-symbol (vector-ref terms j))
+                              x
+                              port))
+                           act)
+                      (fprintf port "end conflict~n"))
+                     (act (print-entry
+                           (gram-sym-symbol (vector-ref terms j))
+                           act
+                           port))))
+                 (loop (add1 j)))))
+         
+         (newline port)
+         
+         (let loop ((j 0))
+           (if (< j num-non-terms)
+               (begin
+                 (let ((s (array2d-ref table (kernel-index state) j)))
+                   (if s
+                       (print-entry
+                        (gram-sym-symbol (vector-ref non-terms j))
+                        s
+                        port)))
+                 (loop (add1 j)))))
+         
+         (newline port))
+       a)
 
-	      (let loop ((j 0))
-		(if (< j num-non-terms)
-		    (begin
-		      (let ((s (array2d-ref table i j)))
-			(if s
-			    (print-entry
-			     (gram-sym-symbol (vector-ref non-terms j))
-			     s
-			     port)))
-		      (loop (add1 j)))))
-
-	      (newline port)
-	      (loop (add1 i)))))
       (if (> SR-conflicts 0)
 	  (fprintf port "~a shift/reduce conflicts~n" SR-conflicts))
       (if (> RR-conflicts 0)
 	  (fprintf port "~a reduce/reduce conflicts~n" RR-conflicts))))
 
-  (define (resolve-conflicts table num-states num-terms num-non-terms)
+  (define (resolve-conflicts a table num-terms num-non-terms)
     (letrec ((SR-conflicts 0)
 	     (RR-conflicts 0)
 	     (get-action
@@ -130,19 +128,19 @@
 		      (loop (car rest) (cdr rest)))
 		     (else (loop current-guess (cdr rest))))))
 		 (else entry)))))
-      (let loop ((state 0))
-	(if (< state num-states)
-	    (begin
-	      (let loop ((term 0))
-		(if (< term num-terms)
-		    (begin
-		      (array2d-set! table state (+ num-non-terms term)
-				    (get-action
-				     (array2d-ref table 
-						  state 
-						  (+ num-non-terms term))))
-		      (loop (add1 term)))))
-	      (loop (add1 state)))))
+      (for-each-state
+       (lambda (state)
+         (let loop ((term 0))
+           (if (< term num-terms)
+               (begin
+                 (array2d-set! table (kernel-index state) (+ num-non-terms term)
+                               (get-action
+                                (array2d-ref table 
+                                             (kernel-index state) 
+                                             (+ num-non-terms term))))
+                 (loop (add1 term))))))
+       a)
+
       (if (> SR-conflicts 0)
 	  (fprintf (current-error-port) 
 		   "~a shift/reduce conflicts~n" 
@@ -154,53 +152,52 @@
     
 
 
-  (define (resolve-prec-conflicts table get-term get-prod
-				  num-states num-terms num-non-terms)
-    (let loop ((state 0))
-      (if (< state num-states)
-	  (begin
-	    (let loop ((term 0))
-	      (if (< term num-terms)
-		  (begin
-		    (let ((action (array2d-ref table 
-					       state 
-					       (+ num-non-terms term))))
-		      (if (and (list? action)
-			       (= 2 (length action))
-			       (or (shift? (car action))
-				   (shift? (cadr action))))
-			  (let* ((shift (if (shift? (car action))
-					    (car action)
-					    (cadr action)))
-				 (reduce (if (shift? (car action))
-					     (cadr action)
-					     (car action)))
-				 (s-prec (term-prec
-					  (vector-ref get-term
-						      term)))
-				 (r-prec (prod-prec
-					  (vector-ref 
-					   get-prod
-					   (reduce-prod-num reduce)))))
-			    (if (and s-prec r-prec)
-				(array2d-set!
-				 table
-				 state
-				 (+ num-non-terms term)
-				 (cond
-				  ((< (prec-num s-prec)
-				      (prec-num r-prec))
-				   reduce)
-				  ((> (prec-num s-prec)
-				      (prec-num r-prec))
-				   shift)
-				  ((eq? 'left (prec-assoc s-prec))
-				   reduce)
-				  ((eq? 'right (prec-assoc s-prec))
-				   shift)
-				  (else #f)))))))
-		    (loop (add1 term)))))
-	    (loop (add1 state))))))
+  (define (resolve-prec-conflicts a table get-term get-prod
+				  num-terms num-non-terms)
+    (for-each-state
+     (lambda (state)
+       (let loop ((term 0))
+         (if (< term num-terms)
+             (begin
+               (let ((action (array2d-ref table 
+                                          (kernel-index state)
+                                          (+ num-non-terms term))))
+                 (if (and (list? action)
+                          (= 2 (length action))
+                          (or (shift? (car action))
+                              (shift? (cadr action))))
+                     (let* ((shift (if (shift? (car action))
+                                       (car action)
+                                       (cadr action)))
+                            (reduce (if (shift? (car action))
+                                        (cadr action)
+                                        (car action)))
+                            (s-prec (term-prec
+                                     (vector-ref get-term
+                                                 term)))
+                            (r-prec (prod-prec
+                                     (vector-ref 
+                                      get-prod
+                                      (reduce-prod-num reduce)))))
+                       (if (and s-prec r-prec)
+                           (array2d-set!
+                            table
+                            (kernel-index state)
+                            (+ num-non-terms term)
+                            (cond
+                              ((< (prec-num s-prec)
+                                  (prec-num r-prec))
+                               reduce)
+                              ((> (prec-num s-prec)
+                                  (prec-num r-prec))
+                               shift)
+                              ((eq? 'left (prec-assoc s-prec))
+                               reduce)
+                              ((eq? 'right (prec-assoc s-prec))
+                               shift)
+                              (else #f)))))))
+               (loop (add1 term))))))
+     a))
 
   ;; In the result table the first index is the state and the second is the 
   ;; term/non-term index (with the non-terms coming first)
@@ -234,56 +231,53 @@
 			   (array2d-set! v i1 i2 (list a old))))))))
 	   (get-lookahead (compute-LA a g)))
 
-      (let loop ((state 0))
-	(if (< state num-states)
-	    (begin
-	      (let loop ((i 0))
-		(if (< i num-gram-syms)
-		    (begin
-		      (let* ((s (if (< i num-non-terms)
-				    (vector-ref get-non-term i)
-				    (vector-ref get-term (- i num-non-terms))))
-			     (goto
-			      (run-automaton (vector-ref get-state state)
-					     s
-					     a)))
-			(if goto
-			    (array2d-set! table 
-					  state 
-					  i
-					  (cond
-                                            ((< i num-non-terms)
-                                             (kernel-index goto))
-                                            ((member i end-term-indexes)
-                                             (make-accept))
-                                            (else
-                                             (make-shift 
-                                              (kernel-index goto)))))))
-		      (loop (add1 i)))))
-	      (let ((items
-		     (filter (lambda (item)
-			       (not (move-dot-right item)))
-			     (kernel-items
-			      (vector-ref get-state state)))))
-		(for-each
-		 (lambda (item)
-		   (for-each 
-		    (lambda (t)
-		      (array2d-add! table 
-				    state
-				    (+ num-non-terms (gram-sym-index t))
-				    (cond
-				     ((not (start-item? item))
-				      (make-reduce
-				       (item-prod-index item)
-                                       (gram-sym-index (prod-lhs (item-prod item)))
-                                       (vector-length (prod-rhs (item-prod item))))))))
-		    (get-lookahead (vector-ref get-state state)
-				   (item-prod item))))
-		 items))	      
-	      (loop (add1 state)))))
-      (resolve-prec-conflicts table get-term get-prod num-states num-terms
-			      num-non-terms)
+      (for-each-state
+       (lambda (state)
+         (let loop ((i 0))
+           (if (< i num-gram-syms)
+               (begin
+                 (let* ((s (if (< i num-non-terms)
+                               (vector-ref get-non-term i)
+                               (vector-ref get-term (- i num-non-terms))))
+                        (goto
+                         (run-automaton (vector-ref get-state (kernel-index state))
+                                        s
+                                        a)))
+                   (if goto
+                       (array2d-set! table 
+                                     (kernel-index state) 
+                                     i
+                                     (cond
+                                       ((< i num-non-terms)
+                                        (kernel-index goto))
+                                       ((member i end-term-indexes)
+                                        (make-accept))
+                                       (else
+                                        (make-shift 
+                                         (kernel-index goto)))))))
+                 (loop (add1 i)))))
+         (for-each
+          (lambda (item)
+            (for-each 
+             (lambda (t)
+               (array2d-add! table 
+                             (kernel-index state)
+                             (+ num-non-terms (gram-sym-index t))
+                             (cond
+                               ((not (start-item? item))
+                                (make-reduce
+                                 (item-prod-index item)
+                                 (gram-sym-index (prod-lhs (item-prod item)))
+                                 (vector-length (prod-rhs (item-prod item))))))))
+             (get-lookahead (vector-ref get-state (kernel-index state))
+                            (item-prod item))))
+          (filter (lambda (item)
+                    (not (move-dot-right item)))
+                  (kernel-items
+                   (vector-ref get-state (kernel-index state))))))
+       a)
+      (resolve-prec-conflicts a table get-term get-prod num-terms
+                              num-non-terms)
       (if (not (string=? file ""))
 	  (with-handlers [(exn:i/o:filesystem?
 			   (lambda (e)
@@ -294,9 +288,9 @@
 			      (exn:i/o:filesystem-detail e))))]
 	    (call-with-output-file file
 	      (lambda (port)
-		(display-parser table get-term get-non-term get-state (grammar-prods g)
+		(display-parser a table get-term get-non-term (grammar-prods g)
                                 port)))))
-      (resolve-conflicts table num-states num-terms num-non-terms)
+      (resolve-conflicts a table num-terms num-non-terms)
       table))
 )
 

@@ -119,7 +119,9 @@
                           
            
            (list-of-terms
-            (syntax-case term-defs (tokens)
+            (syntax-case* term-defs (tokens)
+              (lambda (a b)
+                (eq? (syntax-object->datum a) (syntax-object->datum b)))
               ((tokens term-def ...)
                (andmap identifier? (syntax->list (syntax (term-def ...))))
                (remove-duplicates
@@ -148,7 +150,9 @@
            ;; Get the list of terminals out of input-terms
            
            (list-of-non-terms
-            (syntax-case prods (grammar)
+            (syntax-case* prods (grammar)
+              (lambda (a b)
+                (eq? (syntax-object->datum a) (syntax-object->datum b)))
               ((grammar (non-term production ...) ...)
                (begin
                  (for-each
@@ -179,7 +183,9 @@
            
            ;; Check the precedence declarations for errors and turn them into data
            (precs
-            (syntax-case prec-decls (precs)
+            (syntax-case* prec-decls (precs)
+              (lambda (a b)
+                (eq? (syntax-object->datum a) (syntax-object->datum b)))
               ((precs (type term ...) ...)
                (let ((p-terms 
                       (apply append (syntax-object->datum 
@@ -286,7 +292,9 @@
 	     ;; parse-prod+action: non-term * syntax-object -> production
 	     (parse-prod+action
 	      (lambda (nt prod-so)
-                (syntax-case prod-so (prec)
+                (syntax-case* prod-so (prec)
+                  (lambda (a b)
+                    (eq? (syntax-object->datum a) (syntax-object->datum b)))
                   ((prod-rhs action)
                    (let ((p (parse-prod (syntax prod-rhs))))
                      (set! counter (add1 counter))

@@ -53,47 +53,46 @@
   ;;   lr0-automaton * grammar -> (value (trans-key -> trans-key list)
   ;;                                     (kernel * prod -> trans-key list))
   (define (compute-includes-and-lookback a g)
-    (let* ((states (lr0-states a))
-	   (non-terms (grammar-non-terms g))
-	   (num-states (vector-length states))
+    (let* ((non-terms (grammar-non-terms g))
+	   (num-states (vector-length (lr0-states a)))
 	   (num-non-terms (length non-terms))
 	   (includes (make-array2d num-states num-non-terms null))
 	   (lookback (make-array2d num-states
 				   (grammar-num-prods g)
 				   null)))
-      (let loop ((state 0))
-	(if (< state num-states)
-	    (begin
-	      (for-each
-	       (lambda (non-term)
-		 (for-each
-		  (lambda (prod)
-		    (let loop ((i (make-item prod 0))
-			       (p (vector-ref states state)))
-		      (if (and p i)
-			  (begin
-			    (if (and (non-term? (sym-at-dot i))
-				     (nullable-after-dot? (move-dot-right i)
-							  g))
-				(array2d-add! includes
-					      (kernel-index p)
-					      (gram-sym-index 
-					       (sym-at-dot i))
-					      (make-trans-key
-					       (vector-ref states state)
-					       non-term)))
-			    (if (not (move-dot-right i))
-				(array2d-add! lookback
-					      (kernel-index p)
-					      (prod-index prod)
-					      (make-trans-key
-					       (vector-ref states state)
-					       non-term)))
-			    (loop (move-dot-right i)
-				  (run-automaton p (sym-at-dot i) a))))))
-		  (get-nt-prods g non-term)))
-	       non-terms)
-	      (loop (add1 state)))))
+
+      (for-each-state
+       (lambda (state)
+         (for-each
+          (lambda (non-term)
+            (for-each
+             (lambda (prod)
+               (let loop ((i (make-item prod 0))
+                          (p state))
+                 (if (and p i)
+                     (begin
+                       (if (and (non-term? (sym-at-dot i))
+                                (nullable-after-dot? (move-dot-right i)
+                                                     g))
+                           (array2d-add! includes
+                                         (kernel-index p)
+                                         (gram-sym-index 
+                                          (sym-at-dot i))
+                                         (make-trans-key
+                                          state
+                                          non-term)))
+                       (if (not (move-dot-right i))
+                           (array2d-add! lookback
+                                         (kernel-index p)
+                                         (prod-index prod)
+                                         (make-trans-key
+                                          state
+                                          non-term)))
+                       (loop (move-dot-right i)
+                             (run-automaton p (sym-at-dot i) a))))))
+             (get-nt-prods g non-term)))
+          non-terms))
+       a)
       (values (lambda (tk)
 		(array2d-ref includes 
 			     (kernel-index (trans-key-st tk))
@@ -118,9 +117,79 @@
   (define (compute-LA a g)
     (let-values (((includes lookback) (compute-includes-and-lookback a g)))
       (let ((follow (compute-follow a g includes)))
+        (print-lookback lookback a g)
+        (print-follow follow a g)
 	(lambda (k p)
 	  (let* ((l (lookback k p))
 		 (f (map follow l)))
 	    (apply append f))))))
+
+
+  (define (print-DR dr a g)
+    (print-input-st-sym dr "DR" a g print-output-terms))
+  (define (print-Read Read a g)
+    (print-input-st-sym Read "Read" a g print-output-terms))
+  (define (print-includes i a g)
+    (print-input-st-sym i "includes" a g print-output-st-nt))
+  (define (print-lookback l a g)
+    (print-input-st-prod l "lookback" a g print-output-st-nt))
+  (define (print-follow f a g)
+    (print-input-st-sym f "follow" a g print-output-terms))
+  (define (print-LA l a g)
+    (print-input-st-prod l "LA" a g print-output-terms))
+
+  (define (print-input-st-sym f name a g print-output)
+    (printf "~a:~n" name)
+    (for-each-state
+     (lambda (state)
+       (for-each
+        (lambda (non-term)
+          (let ((res (f (make-trans-key state non-term))))
+            (if (not (null? res))
+                (printf "~a(~a, ~a) = ~a~n"
+                        name
+                        state
+                        (gram-sym-symbol non-term)
+                        (print-output res)))))
+        (grammar-non-terms g)))
+     a)
+    (newline))
+
+  (define (print-input-st-prod f name a g print-output)
+    (printf "~a:~n" name)
+    (for-each-state
+     (lambda (state)
+       (for-each
+        (lambda (non-term)
+          (for-each
+           (lambda (prod)
+             (let ((res (f state prod)))
+               (if (not (null? res))
+                   (printf "~a(~a, ~a) = ~a~n"
+                           name
+                           (kernel-index state)
+                           (prod-index prod)
+                           (print-output res)))))
+           (get-nt-prods g non-term)))
+        (grammar-non-terms g)))
+     a))
   
+  (define (print-output-terms r)
+    (map 
+     (lambda (p)
+       (gram-sym-symbol p))
+     r))
+  
+  (define (print-output-st-nt r)
+    (map
+     (lambda (p)
+       (list
+	(kernel-index (trans-key-st p))
+	(gram-sym-symbol (trans-key-gs p))))
+     r))
+
+
 )
+
+
+

@@ -8,7 +8,7 @@
 	   (lib "list.ss"))
   
   (provide union build-lr0-automaton run-automaton (struct trans-key (st gs))
-	   lr0-transitions lr0-states kernel-items kernel-index)
+	   lr0-transitions lr0-states kernel-items kernel-index for-each-state)
 
   (define (union comp<?)
     (letrec ((union
@@ -34,6 +34,18 @@
   (define-struct kernel (items index) (make-inspector))
   (define-struct trans-key (st gs) (make-inspector))
   (define-struct lr0 (transitions states) (make-inspector))
+
+  ;; A macro to allow easy iteration over the states in an automaton
+  (define-syntax for-each-state
+    (syntax-rules ()
+      ((_ function automaton)
+       (let* ((states (lr0-states automaton))
+              (num-states (vector-length states)))
+         (let loop ((i 0))
+           (if (< i num-states)
+               (begin
+                 (function (vector-ref states i))
+                 (loop (add1 i)))))))))
   
   ;; The kernels in the automaton are represented cannonically.
   ;; That is (equal? a b) <=> (eq? a b)

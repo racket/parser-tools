@@ -23,7 +23,9 @@
                (grammar #f))
            (for-each
             (lambda (arg)
-              (syntax-case arg (debug error tokens start end precs grammar)
+              (syntax-case* arg (debug error tokens start end precs grammar)
+                (lambda (a b)
+                  (eq? (syntax-object->datum a) (syntax-object->datum b)))
                 ((debug filename)
                  (cond
                    ((not (string? (syntax-object->datum (syntax filename))))
