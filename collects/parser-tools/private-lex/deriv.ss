@@ -244,14 +244,15 @@
       (cache (cons 'state (get-key rs)) (lambda () start))
       (let loop ((old-states (list start))
                  (new-states null)
+		 (all-states (list start))
                  (cs (compute-chars (list start))))
         (cond
           ((and (null? old-states) (null? new-states))
            (make-dfa (get-state-number) (state-index start)
                      (mergesort (filter (lambda (x) (cdr x))
-                                        (hash-table-map transitions
-                                                        (lambda (state _)
-                                                          (cons (state-index state) (get-final (state-spec state))))))
+                                        (map (lambda (state)
+					       (cons (state-index state) (get-final (state-spec state))))
+					     all-states))
                                 (lambda (a b) (< (car a) (car b))))
                      (mergesort (hash-table-map transitions
                                                 (lambda (state trans)
@@ -262,9 +263,9 @@
                                                              trans))))
                                 (lambda (a b) (< (car a) (car b))))))
           ((null? old-states)
-           (loop new-states null (compute-chars new-states)))
+           (loop new-states null all-states (compute-chars new-states)))
           ((null? cs)
-           (loop (cdr old-states) new-states (compute-chars (cdr old-states))))
+           (loop (cdr old-states) new-states all-states (compute-chars (cdr old-states))))
           (else
            (let* ((state (car old-states))
                   (c (car cs))
@@ -275,7 +276,8 @@
                        (new-state (cache (cons 'state (get-key new-re))
                                          (lambda ()
                                            (set! new-state? #t)
-                                           (make-state new-re (get-state-number))))))
+                                           (make-state new-re (get-state-number)))))
+		       (new-all-states (if new-state? (cons new-state all-states) all-states)))
                   (hash-table-put! transitions 
                                    state
                                    (cons (cons c new-state)
@@ -283,10 +285,10 @@
                                                          (lambda () null))))
                   (cond
                     (new-state?
-                     (loop old-states (cons new-state new-states) (cdr cs)))
+                     (loop old-states (cons new-state new-states) new-all-states (cdr cs)))
                     (else
-                     (loop old-states new-states (cdr cs))))))
-               (else (loop old-states new-states (cdr cs))))))))))
+                     (loop old-states new-states new-all-states (cdr cs))))))
+               (else (loop old-states new-states all-states (cdr cs))))))))))
   
   (define (print-dfa x)
     (printf "number of states: ~a~n" (dfa-num-states x))
