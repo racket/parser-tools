@@ -4,6 +4,7 @@
   ;; create and use the buffer that the lexer reads from.  See doc.txt.
 	
   (require-for-syntax (lib "list.ss")
+                      (lib "stx.ss" "syntax")
                       (lib "define.ss" "syntax")
                       (lib "boundmap.ss" "syntax")
                       "private-lex/util.ss"
@@ -81,7 +82,7 @@
                         (((special) act)
                            (not (ormap
                                  (lambda (x)
-                                   (module-identifier=? (syntax special) x))
+                                   (module-or-top-identifier=? (syntax special) x))
                                  ids)))
                         (_ #t)))
                     spec/re-act-lst)))
