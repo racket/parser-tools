@@ -14,7 +14,7 @@
   
   ;; fix-check-syntax : (listof identifier?) (listof identifier?) (listof identifier?)
   ;;                    (union syntax? false?) syntax?) -> syntax?
-  (define (fix-check-syntax input-terms start end assocs prods)
+  (define (fix-check-syntax input-terms start ends assocs prods)
     (let* ((term-binders (get-term-list input-terms))
            (get-term-binder
             (let ((t (make-hash-table)))
@@ -23,7 +23,10 @@
                  (hash-table-put! t (syntax-e term) term))
                term-binders)
               (lambda (x)
-                (hash-table-get t (syntax-e x) (lambda () x)))))
+                (let ((r (hash-table-get t (syntax-e x) (lambda () #f))))
+                  (if r
+                      (syntax-local-introduce (datum->syntax-object r (syntax-e x) x x))
+                      x)))))
            (rhs-list
             (syntax-case prods ()
               (((_ rhs ...) ...)
@@ -36,7 +39,7 @@
                              tg))
                           input-terms))
                     ((end ...)
-                     (map get-term-binder end))
+                     (map get-term-binder ends))
                     ((start ...)
                      (map get-term-binder start))
                     ((bind ...)
@@ -64,7 +67,7 @@
                          null)))
         #`(when #f
             (let ((bind void) ...)
-              (void bound ... ... term-group ... start ... end ... prec ...))))))
+              (void ))))));bound ... ... term-group ... start ... end ... prec ...))))))
   
   (define (build-parser filename src-pos suppress input-terms start end assocs prods)
     (let* ((grammar (parse-input input-terms start end assocs prods src-pos))
