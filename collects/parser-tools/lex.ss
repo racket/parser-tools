@@ -200,20 +200,18 @@
 	 ((eq? #\tab char-in)
 	  (let ((skip-amt (- 8 (modulo (lex-buffer-col lb) 8))))
             (set-lex-buffer-tab-skips! lb (cons skip-amt (lex-buffer-tab-skips lb)))
-	    (set-lex-buffer-col! lb (+ skip-amt (lex-buffer-col lb)))
-	    (set-lex-buffer-offset! lb (+ skip-amt (lex-buffer-col lb)))))
+	    (set-lex-buffer-col! lb (+ skip-amt (lex-buffer-col lb)))))
 	 ((eq? #\newline char-in)
 	  (set-lex-buffer-line-lengths!
 	   lb
 	   (cons (lex-buffer-col lb)
 		 (lex-buffer-line-lengths lb)))
 	  (set-lex-buffer-line! lb (add1 (lex-buffer-line lb)))
-	  (set-lex-buffer-col! lb 1)
-	  (set-lex-buffer-offset! lb (add1 (lex-buffer-offset lb))))
+	  (set-lex-buffer-col! lb 1))
 	 (else
-	  (set-lex-buffer-col! lb (add1 (lex-buffer-col lb)))
-	  (set-lex-buffer-offset! lb (add1 (lex-buffer-offset lb)))))
-	char-in)))
+	  (set-lex-buffer-col! lb (add1 (lex-buffer-col lb)))))
+        (set-lex-buffer-offset! lb (add1 (lex-buffer-offset lb)))
+        char-in)))
   
   ;; push-back: lex-buf * int -> c list
   ;; pushes the last read i characters back to be read again
@@ -240,8 +238,6 @@
                    ((eq? #\tab (car from))
                     (set-lex-buffer-col! lb (- (lex-buffer-col lb) 
                                                (car (lex-buffer-tab-skips lb))))
-                    (set-lex-buffer-offset! lb (- (add1 (lex-buffer-offset lb))
-                                                  (car (lex-buffer-tab-skips lb))))
                     (set-lex-buffer-tab-skips! lb (cdr (lex-buffer-tab-skips lb))))
                    (else
                     (set-lex-buffer-col! lb (sub1 (lex-buffer-col lb)))))
