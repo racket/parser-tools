@@ -2,9 +2,9 @@
 (module parser-builder mzscheme
   
   (require "input-file-parser.ss"
-           "table.ss"
            "parser-actions.ss"
            "grammar.ss"
+           "table.ss"
            (lib "class.ss"))
   
   (provide build-parser)
@@ -42,41 +42,8 @@
   
   (define (build-parser filename src-pos suppress input-terms start end assocs prods runtime)
     (let* ((grammar (parse-input start end input-terms assocs prods runtime src-pos))
-	   (table (build-table grammar filename suppress))
-           (table-code 
-            `((lambda (table-list)
-                (let ((v (list->vector table-list)))
-                  (let build-table-loop ((i 0))
-                    (cond
-                      ((< i (vector-length v))
-                       (let ((vi (vector-ref v i)))
-                         (cond
-                           ((list? vi) 
-                            (vector-set! v i
-                                         (cond
-                                           ((eq? 's (car vi))
-                                            (make-shift (cadr vi)))
-                                           ((eq? 'r (car vi))
-                                            (make-reduce (cadr vi) (caddr vi) (cadddr vi)))
-                                           ((eq? 'a (car vi)) (make-accept)))))))
-                       (build-table-loop (add1 i)))
-                      (else v)))))
-              (quote
-               ,(map (lambda (action)
-                       (cond
-                         ((shift? action)
-                          `(s ,(shift-state action)))
-                         ((reduce? action)
-                          `(r ,(reduce-prod-num action)
-                              ,(reduce-lhs-num action)
-                              ,(reduce-rhs-length action)))
-                         ((accept? action)
-                          `(a))
-                         (else action)))
-                     (vector->list table)))))
-            
+           (table (build-table grammar filename suppress))
            (num-non-terms (send grammar get-num-non-terms))
-
            (token-code
             `(let ((ht (make-hash-table)))
                (begin
@@ -86,12 +53,22 @@
                                             ,(+ num-non-terms (gram-sym-index term))))
                         (send grammar get-terms))
                  ht)))
-           
            (actions-code
             `(vector ,@(map prod-action (send grammar get-prods)))))
-      (values table-code
-              token-code
-              actions-code
-              (fix-check-syntax start input-terms prods assocs end))))
+      (let loop ((i 1))
+        (if (< i (vector-length table))
+            (let ((a (vector-ref table i)))
+              (vector-set! table i (cond
+                                     ((accept? a) 'accept)
+                                     ((shift? a) (- (shift-state a)))
+                                     ((reduce? a) (vector (reduce-prod-num a)
+                                                          (reduce-lhs-num a)
+                                                          (reduce-rhs-length a)))
+                                     (else a)))
+              (loop (add1 i)))))
+    (values table
+            token-code
+            actions-code
+            (fix-check-syntax start input-terms prods assocs end))))
       
   )

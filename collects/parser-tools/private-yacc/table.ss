@@ -213,9 +213,9 @@
 
   ;; In the result table the first index is the state and the second is the 
   ;; term/non-term index (with the non-terms coming first)
-  ;; buile-table: grammar * string -> action2d-array
+  ;; buile-table: grammar * string -> action array2d
   (define (build-table g file suppress)
-    (let* ((a (time (build-lr0-automaton g)))
+    (let* ((a (build-lr0-automaton g))
            (terms (send g get-terms))
            (non-terms (send g get-non-terms))
            (get-term (list->vector terms))
@@ -229,7 +229,7 @@
                (+ num-non-terms (gram-sym-index term)))
              (send g get-end-terms)))
            (num-gram-syms (+ num-terms num-non-terms))
-           (table (make-array2d (vector-length (send a get-states)) num-gram-syms #f))
+           (table (make-array2d (send a get-num-states) num-gram-syms #f))
            (array2d-add!
             (lambda (v i1 i2 a)
               (let ((old (array2d-ref v i1 i2)))
@@ -240,69 +240,71 @@
                   (else (if (not (equal? a old))
                             (array2d-set! v i1 i2 (list a old))))))))
            (get-lookahead (time (compute-LA a g))))
-      (time
-       (send a for-each-state
-             (lambda (state)
-               (let loop ((i 0))
-                 (if (< i num-gram-syms)
-                     (begin
-                       (let* ((s (if (< i num-non-terms)
-                                     (vector-ref get-non-term i)
-                                     (vector-ref get-term (- i num-non-terms))))
-                              (goto
-                               (send a run-automaton state s)))
-                         (if goto
-                             (array2d-set! table 
-                                           (kernel-index state) 
-                                           i
-                                           (cond
-                                             ((< i num-non-terms)
-                                              (kernel-index goto))
-                                             ((member i end-term-indexes)
-                                              (make-accept))
-                                             (else
-                                              (make-shift 
-                                               (kernel-index goto)))))))
-                       (loop (add1 i)))))
+     
+      (send a for-each-state
+            (lambda (state)
+              (let loop ((i 0))
+                (if (< i num-gram-syms)
+                    (begin
+                      (let* ((s (if (< i num-non-terms)
+                                    (vector-ref get-non-term i)
+                                    (vector-ref get-term (- i num-non-terms))))
+                             (goto
+                              (send a run-automaton state s)))
+                        (if goto
+                            (array2d-set! table 
+                                          (kernel-index state) 
+                                          i
+                                          (cond
+                                            ((< i num-non-terms)
+                                             (kernel-index goto))
+                                            ((member i end-term-indexes)
+                                             (make-accept))
+                                            (else
+                                             (make-shift 
+                                              (kernel-index goto)))))))
+                      (loop (add1 i)))))
+            
+              (for-each
+               (lambda (item)
+                 (let ((item-prod (item-prod item)))
+                   (bit-vector-for-each 
+                    (lambda (term-index)
+                      (array2d-add! table 
+                                    (kernel-index state)
+                                    (+ num-non-terms term-index)
+                                    (cond
+                                      ((not (start-item? item))
+                                       (make-reduce
+                                        (prod-index item-prod)
+                                        (gram-sym-index (prod-lhs item-prod))
+                                        (vector-length (prod-rhs item-prod)))))))
+                    (get-lookahead state item-prod))))
                
-               (for-each
-                (lambda (item)
-                  (let ((item-prod (item-prod item)))
-                    (bit-vector-for-each 
-                     (lambda (term-index)
-                       (array2d-add! table 
-                                     (kernel-index state)
-                                     (+ num-non-terms term-index)
-                                     (cond
-                                       ((not (start-item? item))
-                                        (make-reduce
-                                         (prod-index item-prod)
-                                         (gram-sym-index (prod-lhs item-prod))
-                                         (vector-length (prod-rhs item-prod)))))))
-                     (get-lookahead state item-prod))))
-                
-                (append (hash-table-get (send a get-epsilon-trans) state (lambda () null))
-                        (filter (lambda (item)
-                                  (not (move-dot-right item)))
-                                (kernel-items state)))))))
-      
+               (append (hash-table-get (send a get-epsilon-trans) state (lambda () null))
+                       (filter (lambda (item)
+                                 (not (move-dot-right item)))
+                               (kernel-items state))))))
+ 
       (resolve-prec-conflicts a table get-term get-prod num-terms
-                              num-non-terms)
-      
-      (if (not (string=? file ""))
-          (with-handlers [(exn:i/o:filesystem?
-                           (lambda (e)
-                             (fprintf 
-                              (current-error-port)
-                              "Cannot write debug output to file \"~a\".  ~a~n"
-                              (exn:i/o:filesystem-pathname e)
-                              (exn:i/o:filesystem-detail e))))]
-            (call-with-output-file file
-              (lambda (port)
-                (display-parser a table get-term get-non-term (send g get-prods)
-                                port)))))
-      (resolve-conflicts a table num-terms num-non-terms suppress)
-      table))
-)
-       
+                            num-non-terms)
+    
+    (if (not (string=? file ""))
+        (with-handlers [(exn:i/o:filesystem?
+                         (lambda (e)
+                           (fprintf 
+                            (current-error-port)
+                            "Cannot write debug output to file \"~a\".  ~a~n"
+                            (exn:i/o:filesystem-pathname e)
+                            (exn:i/o:filesystem-detail e))))]
+          (call-with-output-file file
+            (lambda (port)
+              (display-parser a table get-term get-non-term (send g get-prods)
+                              port)))))
+    (resolve-conflicts a table num-terms num-non-terms suppress)
+    table))
 
+    )
+     
+     
+     

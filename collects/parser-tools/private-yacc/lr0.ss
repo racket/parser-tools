@@ -10,8 +10,8 @@
 	   (lib "class.ss"))
   
   (provide build-lr0-automaton lr0%
-	   (struct trans-key (st gs))
-	   kernel-items kernel-index kernel-list-remove-duplicates)
+	   (struct trans-key (st gs)) trans-key-list-remove-dups
+	   kernel-items kernel-index)
   
   ;; kernel = (make-kernel (LR1-item list) index)
   ;;   the list must be kept sorted according to item<? so that equal? can
@@ -21,25 +21,30 @@
   (define-struct kernel (items index) (make-inspector))
   (define-struct trans-key (st gs) (make-inspector))
 
+  (define (trans-key<? a b)
+    (let ((kia (kernel-index (trans-key-st a)))
+          (kib (kernel-index (trans-key-st b))))
+    (or (< kia kib)
+        (and (= kia kib)
+             (< (non-term-index (trans-key-gs a))
+                (non-term-index (trans-key-gs b)))))))
   
-  ;; kernel-list-remove-duplicates: kernel list * int -> kernel list
-  (define (kernel-list-remove-duplicates k num-states)
-    (let ((v (make-vector num-states #f)))
-      (for-each
-       (lambda (k)
-	 (vector-set! v (kernel-index k) k))
-       k)
-      (let loop ((i 0))
-	(cond
-          ((< i num-states)
-           (let ((k (vector-ref v i)))
-             (if k 
-                 (cons k (loop (add1 i)))
-                 (loop (add1 i)))))
-          (else null)))))
-  
-	  
-
+  (define (trans-key-list-remove-dups tkl)
+    (let loop ((sorted (quicksort tkl trans-key<?)))
+      (cond
+        ((null? sorted) null)
+        ((null? (cdr sorted)) sorted)
+        (else
+         (if (and (= (non-term-index (trans-key-gs (car sorted)))
+                     (non-term-index (trans-key-gs (cadr sorted))))
+                  (= (kernel-index (trans-key-st (car sorted)))
+                     (kernel-index (trans-key-st (cadr sorted)))))
+             (loop (cdr sorted))
+             (cons (car sorted) (loop (cdr sorted))))))))
+             
+      
+           
+  ;; kernel-list-remove-duplicates
   ;; LR0-automaton = object of class lr0%
   (define lr0%
     (class object%
@@ -48,13 +53,13 @@
       (init term-hash non-term-hash)
       (init-field states epsilons num-terms num-non-terms)
       
-      (define term-transitions (make-lr0-table term-hash (vector-length states) num-terms))
-      (define non-term-transitions (make-lr0-table non-term-hash (vector-length states) num-non-terms))
+      (define term-transitions (make-lr0-table term-hash (vector-length states) num-terms #f))
+      (define non-term-transitions (make-lr0-table non-term-hash (vector-length states) num-non-terms #f))
       
       (define reverse-term-hash (reverse-hash term-hash))
       (define reverse-non-term-hash (reverse-hash non-term-hash))
-      (define reverse-term-transitions (make-lr0-table reverse-term-hash (vector-length states) num-terms))
-      (define reverse-non-term-transitions (make-lr0-table reverse-non-term-hash (vector-length states) num-non-terms))
+      (define reverse-term-transitions (make-lr0-table reverse-term-hash (vector-length states) num-terms null))
+      (define reverse-non-term-transitions (make-lr0-table reverse-non-term-hash (vector-length states) num-non-terms null))
       
       (define mapped-non-terms
 	(hash-table-map non-term-hash (lambda (k v) k)))
@@ -101,8 +106,8 @@
 			  (array2d-ref reverse-non-term-transitions (kernel-index k) (non-term-index s)))
 			k))))))
   
-  (define (make-lr0-table auto-hash states syms)
-    (let ((t (make-array2d states syms #f)))
+  (define (make-lr0-table auto-hash states syms def)
+    (let ((t (make-array2d states syms def)))
       (hash-table-map auto-hash
                       (lambda (k v)
                         (array2d-set! t 

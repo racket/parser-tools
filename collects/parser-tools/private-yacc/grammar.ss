@@ -185,7 +185,14 @@
                (if (and (non-term? (vector-ref rhs i)) (nullable-non-term? (vector-ref rhs i)))
                    (loop (add1 i))
                    #f))
-              ((= i prod-length) #t)))))))
+              ((= i prod-length) #t)))))
+      
+      (define/public (nullable-non-term-thunk)
+        (lambda (nt)
+          (nullable-non-term? nt)))
+      (define/public (nullable-after-dot?-thunk)
+        (lambda (item)
+          (nullable-after-dot? item)))))
 	
 
   ;; ------------------------ Productions ---------------------------
