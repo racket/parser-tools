@@ -17,6 +17,7 @@
   ;; get-args: int * syntax-object list * syntax-object -> syntax-object list
   (define (get-args i rhs act src-pos term-defs)
     (let ((empty-table (make-hash-table)))
+      (hash-table-put! empty-table 'error #t)
       (for-each (lambda (td)
                   (let ((v (syntax-local-value td)))
                     (if (e-terminals-def? v)

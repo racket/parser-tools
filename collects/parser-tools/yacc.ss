@@ -177,7 +177,7 @@
          (reduce-stack (cdr stack) (sub1 num) ret-vals src-pos)))
       (else (values stack ret-vals))))
 
-  (define-struct stack-frame (state value start-pos end-pos))
+  (define-struct stack-frame (state value start-pos end-pos) (make-inspector))
  
   (define empty-stack (list (make-stack-frame 0 #f #f #f)))
 
@@ -214,26 +214,28 @@
              
              (fix-error
               (lambda (stack tok ip get-token)
+                (printf "stack: ~a~n" stack)
                 (letrec ((remove-input
                           (lambda ()
                             (if (memq (token-name tok) ends)
-                                #f
+                                (raise-read-error "parser: Cannot continue after error"
+                                                  #f #f #f #f #f)
                                 (let ((a (find-action stack tok ip)))
                                   (cond
                                     ((shift? a)
-                                     ;; (printf "shift:~a~n" (shift-state a))
+                                     (printf "shift:~a~n" (shift-state a))
                                      (cons (if src-pos
                                                (make-stack-frame (shift-state a)
-                                                                 (if (token? ip) (token-value ip) #f)
+                                                                 (token-value tok)
                                                                  (cadr ip)
                                                                  (caddr ip))
                                                (make-stack-frame (shift-state a)
-                                                                 (if (token? ip) (token-value ip) #f)
+                                                                 (token-value tok)
                                                                  #f
                                                                  #f))
                                            stack))
                                     (else
-                                     ;; (printf "discard input:~a~n" tok)
+                                     (printf "discard input:~a~n" tok)
                                      (set! ip (get-token))
                                      (set! tok (input->token ip))
                                      (remove-input)))))))
@@ -242,28 +244,29 @@
                             (let ((a (find-action stack (make-token 'error #f) ip)))
                               (cond
                                 ((shift? a)
-                                 ;; (printf "shift:~a~n" (shift-state a))
+                                 (printf "shift:~a~n" (shift-state a))
                                  (set! stack 
                                        (cons
                                         (if src-pos
-                                           (make-stack-frame (shift-state a) 
-                                                             #f 
-                                                             (cadr ip)
-                                                             (caddr ip))
-                                           (make-stack-frame (shift-state a) 
-                                                             #f
-                                                             #f
-                                                             #f))
+                                            (make-stack-frame (shift-state a) 
+                                                              #f 
+                                                              (cadr ip)
+                                                              (caddr ip))
+                                            (make-stack-frame (shift-state a)
+                                                              #f
+                                                              #f
+                                                              #f))
                                         stack))
                                  (remove-input))
                                 (else
-                                 ;; (printf "discard state:~a~n" (car stack))
+                                 (printf "discard state:~a~n" (car stack))
                                  (cond
                                    ((< (length stack) 2)
-                                    (printf "Unable to shift error token~n")
-                                    #f)					
+                                    (raise-read-error "parser: Cannot continue after error"
+                                                      #f #f #f #f #f))
                                    (else
-                                    (set! stack (cdr stack))))))))))
+                                    (set! stack (cdr stack))
+                                    (remove-states)))))))))
                   (remove-states))))
              
              (find-action
@@ -331,13 +334,8 @@
                (if src-pos
                    (err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
                    (err #t (token-name tok) (token-value tok)))
-               (let ((new-stack (fix-error stack tok ip get-token)))
-                 (if new-stack
-                     (parsing-loop new-stack (get-token))
-                     (raise-read-error 
-                      "parser: Could not parse input"
-                      #f #f #f #f #f))))))))))
-
+               (parsing-loop (fix-error stack tok ip get-token) (get-token)))))))))
+                 
   
 
   )
