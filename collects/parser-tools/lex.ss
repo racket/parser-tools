@@ -64,35 +64,27 @@
                             (syntax->list (syntax (re-act ...))))
                            (spec-act 
                             (get-special-action spec/re-act-lst 'special #'(void)))
+                           (spec-error-act
+                            (get-special-action spec/re-act-lst 'special-error #f))
                            (spec-comment-act 
-                            (get-special-action spec/re-act-lst 'special-comment 
-                                                #f))
+                            (get-special-action spec/re-act-lst 'special-comment #f))
                            (re-act-lst
                             (filter-out-specials spec/re-act-lst
                                                  '(special special-comment special-error))))
-                      (let ((table (generate-table re-act-lst stx)))
+                      (let ((table (generate-table re-act-lst #'here stx)))
                         (with-syntax ((start-state-stx (table-start table))
                                       (trans-table-stx (table-trans table))
                                       (eof-table-stx (table-eof table))
                                       (no-lookahead-stx (table-no-lookahead table))
                                       (actions-stx `(vector ,@(vector->list (table-actions table))))
-                                      (spec-act-stx 
-                                       (datum->syntax-object
-                                        spec-act
-                                        `(lambda (start-pos end-pos special return-without-pos input-port)
-                                           ,spec-act)
-                                        spec-act))
-                                      (has-spec-comment-act-stx
-                                       (if spec-comment-act #t #f))
+                                      (spec-act-stx
+                                       (wrap-action spec-act 'special #'here spec-act))
+                                      (has-error-act?-stx (if spec-error-act #t #f))
+                                      (spec-error-act-stx
+                                       (wrap-action spec-act 'exception #'here spec-error-act))
+                                      (has-comment-act?-stx (if spec-comment-act #t #f))
                                       (spec-comment-act-stx
-                                       (if spec-comment-act
-					   (datum->syntax-object
-					    spec-comment-act
-					    `(lambda (start-pos end-pos ,(gensym)
-								return-without-pos input-port)
-					       ,spec-comment-act)
-					    spec-comment-act)
-					   #'void))
+                                       (wrap-action spec-act (gensym) #'here spec-comment-act))
                                       (wrap? wrap?))
                           (syntax 
                            (lexer-body start-state-stx 
@@ -101,7 +93,9 @@
                                        actions-stx
                                        no-lookahead-stx
                                        spec-act-stx
-                                       has-spec-comment-act-stx
+                                       has-error-act?-stx
+                                       spec-error-act-stx
+                                       has-comment-act?-stx
                                        spec-comment-act-stx
                                        wrap?))))))))))))
       (values
@@ -159,7 +153,8 @@
                        (vector-ref actions longest-match-action) wrap?)))))
   
   (define (lexer-body start-state trans-table eof-table actions no-lookahead
-                      special-action has-spec-cmt-act? special-comment-action wrap?)
+                      special-action has-special-error-action? special-error-action
+                      has-special-comment-action? special-comment-action wrap?)
     (letrec ((lexer
               (lambda (ip)
                 (unless (input-port? ip)
@@ -173,16 +168,22 @@
                   (cond
                     ((eq? 'special first-char)
                      (let* ((comment? #f)
+                            (error? #f)
                             (spec (with-handlers ((exn:special-comment?
-                                                   (lambda (x) (set! comment? #t))))
+                                                   (lambda (x) (set! comment? #t)))
+                                                  (not-break-exn?
+                                                   (lambda (ex) (set! error? ex))))
                                     (read-char-or-special ip))))
                        (cond
-                         ((and comment? (not has-spec-cmt-act?))
+                         ((and comment? (not has-special-comment-action?))
                           (lexer ip))
+                         ((and error? (not has-special-error-action?))
+                          (raise error?))
                          (else
-                          (do-match ip first-pos (if comment?
-                                                     special-comment-action
-                                                     special-action)
+                          (do-match ip first-pos (cond
+                                                   (comment? special-comment-action)
+                                                   (error? special-error-action)
+                                                   (else special-action))
                                     spec wrap?)))))
                     (else
                      (let lexer-loop (
