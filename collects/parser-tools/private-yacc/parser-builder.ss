@@ -8,7 +8,7 @@
   
   (provide/contract
    (build-parser ((string? any? any? syntax? (listof syntax?) (listof syntax?)
-                   (union syntax? false?) syntax? syntax?) . ->* . (any? any? any? any?))))
+                   (union syntax? false?) syntax?) . ->* . (any? any? any? any?))))
   
   (define (strip so)
     (syntax-local-introduce
@@ -48,8 +48,8 @@
                             (append terms binds))
                    (void ,@(append ends precs term-group-stx (map strip bounds)))))))))
   
-  (define (build-parser filename src-pos suppress input-terms start end assocs prods runtime)
-    (let* ((grammar (parse-input start end input-terms assocs prods runtime src-pos))
+  (define (build-parser filename src-pos suppress input-terms start end assocs prods)
+    (let* ((grammar (parse-input start end input-terms assocs prods src-pos))
            (table (build-table grammar filename suppress))
            (num-non-terms (send grammar get-num-non-terms))
            (token-code

@@ -8,16 +8,17 @@
            "grammar.ss"
            (lib "class.ss")
            (lib "contract.ss"))
+  (require-for-template mzscheme)
   
 
   (provide/contract 
-   (parse-input ((listof syntax?) (listof syntax?) syntax? (union false? syntax?) syntax? syntax? any? . -> . (is-a?/c grammar%)))
+   (parse-input ((listof syntax?) (listof syntax?) syntax? (union false? syntax?) syntax? any? . -> . (is-a?/c grammar%)))
    (get-term-list (syntax? . -> . (listof syntax?))))
 
   (define stx-for-original-property (read-syntax #f (open-input-string "original")))
 
   ;; get-args: int * syntax-object list * syntax-object -> syntax-object list
-  (define (get-args i rhs act src-pos term-defs)
+  (define (get-args i rhs src-pos term-defs)
     (let ((empty-table (make-hash-table)))
       (hash-table-put! empty-table 'error #t)
       (for-each (lambda (td)
@@ -32,18 +33,18 @@
         (cond
           ((null? rhs) null)
           (else
-           (let ((b (syntax-local-introduce (car rhs)))
+           (let ((b (car rhs))
                  (name (if (hash-table-get empty-table (syntax-object->datum (car rhs)) (lambda () #f))
                            (gensym)
                            (string->symbol (format "$~a" i)))))
              (cond
                (src-pos
-                `(,(datum->syntax-object act name b stx-for-original-property)
-                  ,(datum->syntax-object act (string->symbol (format "$~a-start-pos" i)) b stx-for-original-property)
-                  ,(datum->syntax-object act (string->symbol (format "$~a-end-pos" i)) b stx-for-original-property)
+                `(,(datum->syntax-object b name b stx-for-original-property)
+                  ,(datum->syntax-object b (string->symbol (format "$~a-start-pos" i)) b stx-for-original-property)
+                  ,(datum->syntax-object b (string->symbol (format "$~a-end-pos" i)) b stx-for-original-property)
                   ,@(get-args (add1 i) (cdr rhs))))
                (else
-                `(,(datum->syntax-object act name b stx-for-original-property)
+                `(,(datum->syntax-object b name b stx-for-original-property)
                   ,@(get-args (add1 i) (cdr rhs)))))))))))
     
   ;; Given the list of terminal symbols and the precedence/associativity definitions,
@@ -108,7 +109,7 @@
         "Token declaration must be (tokens symbol ...)"
         so))))
   
-  (define (parse-input start ends term-defs prec-decls prods runtime src-pos)
+  (define (parse-input start ends term-defs prec-decls prods src-pos)
     (let* ((start-syms (map syntax-object->datum start))
            
            (list-of-terms (map syntax-object->datum (get-term-list term-defs)))
@@ -265,11 +266,9 @@
              ;; parse-action: syntax-object * syntax-object -> syntax-object
              (parse-action 
               (lambda (rhs act)
-                (datum->syntax-object
-                 runtime
-                 `(lambda ,(get-args 1 (syntax->list rhs) act src-pos term-defs)
-                    ,act)
-                 act)))
+                (quasisyntax/loc act
+                  (lambda #,(get-args 1 (syntax->list rhs) src-pos term-defs)
+                    #,act))))
              
 	     ;; parse-prod+action: non-term * syntax-object -> production
 	     (parse-prod+action
@@ -347,7 +346,7 @@
                (start-prods
                 (map (lambda (start end-non-term)
                        (list (make-prod start (vector end-non-term) #f #f 
-                                        (datum->syntax-object runtime `(lambda (x) x)))))
+                                        (syntax (lambda (x) x)))))
                      starts end-non-terms))
                (prods 
                 `(,@start-prods
@@ -361,13 +360,11 @@
                                       (hash-table-get term-table end))
                                      #f
                                      #f
-                                     (datum->syntax-object
-                                      runtime
-                                      `(lambda (x) x))))
+                                     (syntax (lambda (x) x))))
                         end-terms))
                      end-non-terms start-syms)
                   ,@parsed-prods)))
-
+          
           (make-object grammar%
             prods
             (map car start-prods)

@@ -128,8 +128,7 @@
                                      start
                                      end
                                      precs
-                                     grammar
-                                     stx)))
+                                     grammar)))
            (when (and yacc-output (not (string=? yacc-output "")))
              (with-handlers [(exn:fail:filesystem?
                               (lambda (e)
