@@ -207,7 +207,7 @@
   (define (extract-no-src-pos ip)
     (extract-helper ip #f #f))
   
-  (define-struct stack-frame (state value start-pos end-pos))
+  (define-struct stack-frame (state value start-pos end-pos) (make-inspector))
   
   (define (make-empty-stack i) (list (make-stack-frame i #f #f #f)))
   
@@ -230,14 +230,14 @@
                             (let ((a (find-action stack tok val start-pos end-pos)))
                               (cond
                                 ((shift? a)
-                                 ;;(printf "shift:~a~n" (shift-state a))
+                                 ;; (printf "shift:~a~n" (shift-state a))
                                  (cons (make-stack-frame (shift-state a)
                                                          val
                                                          start-pos
                                                          end-pos)
                                        stack))
                                 (else
-                                 ;;(printf "discard input:~a~n" tok)
+                                 ;; (printf "discard input:~a~n" tok)
                                  (let-values (((tok val start-pos end-pos)
                                                (extract (get-token))))
                                    (remove-input tok val start-pos end-pos))))))))
@@ -245,7 +245,7 @@
                   (let ((a (find-action stack 'error #f start-pos end-pos)))
                     (cond
                       ((shift? a)
-                       ;;(printf "shift:~a~n" (shift-state a))
+                       ;; (printf "shift:~a~n" (shift-state a))
                        (set! stack 
                              (cons
                               (make-stack-frame (shift-state a) 
@@ -253,9 +253,9 @@
                                                 start-pos
                                                 end-pos)
                               stack))
-                       (remove-input))
+                       (remove-input tok val start-pos end-pos))
                       (else
-                       ;;(printf "discard state:~a~n" (car stack))
+                       ;; (printf "discard state:~a~n" (car stack))
                        (cond
                          ((< (length stack) 2)
                           (raise-read-error "parser: Cannot continue after error"

@@ -4,7 +4,7 @@
 ;; Import the parser and lexer generators.
 (require (lib "yacc.ss" "parser-tools")
          (lib "lex.ss" "parser-tools")
-         (lib "readerr.ss" "syntax"))
+         (prefix : (lib "lex-sre.ss" "parser-tools")))
 
 (define-tokens value-tokens (NUM VAR FNCT))
 (define-empty-tokens op-tokens (newline = OP CP + - * / ^ EOF NEG))
@@ -13,30 +13,29 @@
 (define vars (make-hash-table))
 
 (define-lex-abbrevs
- (lower-letter (- "a" "z"))
+ (lower-letter (:/ "a" "z"))
 
- (upper-letter (- #\A #\Z))
+ (upper-letter (:/ #\A #\Z))
 
- ;; (- 0 9) would not work because the lexer does not understand numbers.  (- #\0 #\9) is ok too.
- (digit (- "0" "9")))
+ ;; (:/ 0 9) would not work because the lexer does not understand numbers.  (:/ #\0 #\9) is ok too.
+ (digit (:/ "0" "9")))
  
 (define calcl
   (lexer
    [(eof) 'EOF]
    ;; recursively call the lexer on the remaining input after a tab or space.  Returning the
    ;; result of that operation.  This effectively skips all whitespace.
-   [(: #\tab #\space) (calcl input-port)]
-   ;; The parser will treat the return of 'newline the same as (token-newline)
-   [#\newline 'newline]
-   [(: "=" "+" "-" "*" "/" "^") (string->symbol lexeme)]
+   [(:or #\tab #\space) (calcl input-port)]
+   ;; (token-newline) returns 'newline
+   [#\newline (token-newline)]
+   ;; Since (token-=) returns '=, just return the symbol directly
+   [(:or "=" "+" "-" "*" "/" "^") (string->symbol lexeme)]
    ["(" 'OP]
    [")" 'CP]
    ["sin" (token-FNCT sin)]
-   [(+ (: lower-letter upper-letter)) (token-VAR (string->symbol lexeme))]
-   [(+ digit) (token-NUM (string->number lexeme))]
-   ;; Strings which dr/mzscheme does not think of as symbols (such as . or ,) must be
-   ;; entered as a string or character.  "." would also be ok.
-   [(@ (+ digit) #\. (* digit)) (token-NUM (string->number lexeme))]))
+   [(:+ (:or lower-letter upper-letter)) (token-VAR (string->symbol lexeme))]
+   [(:+ digit) (token-NUM (string->number lexeme))]
+   [(:: (:+ digit) #\. (:* digit)) (token-NUM (string->number lexeme))]))
    
 
 (define calcp
@@ -85,3 +84,5 @@
 		      (printf "~a~n" result)
 		      (one-line)))))))
     (one-line)))
+
+(calc (open-input-string "(1 + 2 * 3 3) 3)\n(1.2 + 3.3) / 44 \n !"))
