@@ -304,9 +304,9 @@
                                          iso-control))))
          (syntax (define-lex-abbrevs (names ranges) ...))))))
                                              
-  (define-lex-abbrev any-char (^))
-  (define-lex-abbrev any-string (&))
-  (define-lex-abbrev nothing (:))
+  (define-lex-abbrev any-char (char-complement (union)))
+  (define-lex-abbrev any-string (intersection))
+  (define-lex-abbrev nothing (union))
   (create-unicode-abbrevs #'here)
   
 
