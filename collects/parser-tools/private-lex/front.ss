@@ -1,5 +1,6 @@
 (module front mzscheme
   (require (prefix is: (lib "integer-set.ss"))
+           (lib "list.ss")
            "util.ss"
            "stx.ss"
            "re.ss"
@@ -18,10 +19,31 @@
   ;; - (vector-of (union #f nat))
   ;; - (vector-of (vector-of (cons (cons nat nat) nat)))
   
-  ;; dfa->1d-table : dfa -> (same as build-lexer)
-;  (define (dfa->1d-table dfa)
-;    (let (
+  (define loc:integer-set-contents is:integer-set-contents)
   
+  ;; dfa->1d-table : dfa -> (same as build-lexer)
+ (define (dfa->1d-table dfa)
+   (let ((state-table (make-vector (dfa-num-states dfa) #f)))
+     (for-each (lambda (trans)
+                 (let* ((from-state (car trans))
+                        (all-chars/to (cdr trans))
+                        (flat-all-chars/to
+                         (mergesort
+                          (apply append
+                                 (map (lambda (chars/to)
+                                        (let ((char-ranges (loc:integer-set-contents (car chars/to)))
+                                              (to (cdr chars/to)))
+                                          (map (lambda (char-range)
+                                                 (cons char-range to))
+                                               char-ranges)))
+                                      all-chars/to))
+                          (lambda (a b)
+                            (< (caar a) (caar b))))))
+                   (vector-set! state-table from-state (list->vector flat-all-chars/to))))
+               (dfa-transitions dfa))
+     state-table))
+  
+         
   (define loc:foldr is:foldr)
   
   ;; dfa->2d-table : dfa -> (same as build-lexer)
@@ -76,6 +98,11 @@
                (d2 (make-dfa 4 1 (list (cons 2 2) (cons 3 3))
                              (list (cons 1 (list (cons (is:make-range 49 50) 1)
                                                  (cons (is:make-range 51) 2)))
+                                   (cons 2 (list (cons (is:make-range 49) 3))))))
+               (d3 (make-dfa 4 1 (list (cons 2 2) (cons 3 3))
+                             (list (cons 1 (list (cons (is:make-range 100 200) 0)
+                                                 (cons (is:make-range 49 50) 1)
+                                                 (cons (is:make-range 51) 2)))
                                    (cons 2 (list (cons (is:make-range 49) 3)))))))
               ((dfa->2d-table d1) (make-vector 256 #f))
               ((dfa->2d-table d2) (let ((v (make-vector 1024 #f)))
@@ -84,6 +111,15 @@
                                     (vector-set! v 307 2)
                                     (vector-set! v 561 3)
                                     v))
+              ((dfa->1d-table d1) (make-vector 1 #f))
+              ((dfa->1d-table d2) #(#f
+                                  #(((49 . 50) . 1) ((51 . 51) . 2))
+                                  #(((49 . 49) . 3))
+                                  #f))
+              ((dfa->1d-table d3) #(#f
+                                  #(((49 . 50) . 1) ((51 . 51) . 2) ((100 . 200) . 0))
+                                  #(((49 . 49) . 3))
+                                  #f))
               ((dfa->actions d1) (vector #f))
               ((dfa->actions d2) (vector #f #f 2 3))
               ((dfa->no-look d1) (vector #t))
@@ -107,5 +143,5 @@
            (dfa (time (build-dfa re-acts cache))))
       ;(print-dfa dfa)
       ;(printf "states: ~a~n" (dfa-num-states dfa))
-      (values (time (dfa->2d-table dfa)) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa))))
+      (values (time (dfa->1d-table dfa)) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa))))
   )

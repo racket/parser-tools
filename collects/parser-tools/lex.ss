@@ -115,8 +115,7 @@
         #f
         "Form should be (define-lex-abbrevs (name re) ...)"
         stx))))
-
-  
+#;  
   (define (lexer-body start-state trans-table actions no-lookahead
                       special-action special-error-action
                       has-special-comment-action? special-comment-action eof-action wrap?)
@@ -173,6 +172,106 @@
                                  (vector-ref 
                                   trans-table
                                   (+ (char->integer char) (* 256 state)))))))
+                         (cond
+                           ((not next-state)
+                            (check-match ip first-pos longest-match-length
+                                         length longest-match-action wrap?))
+                           ((vector-ref no-lookahead next-state)
+                            (let ((act (vector-ref actions next-state)))
+                              (check-match ip 
+                                           first-pos 
+                                           (if act length longest-match-length)
+                                           length
+                                           (if act act longest-match-action)
+                                           wrap?)))
+                           (else
+                            (let ((act (vector-ref actions next-state)))
+                              (lexer-loop next-state 
+                                          (peek-char-or-special ip length)
+                                          (if act
+                                              act
+                                              longest-match-action)
+                                          (add1 length)
+                                          (if act
+                                              length
+                                              longest-match-length)))))))))))))
+      lexer))
+
+  (define (get-next-state-helper char min max table)
+    (if (>= min max)
+        #f
+        (let* ((try (quotient (+ min max) 2))
+               (el (vector-ref table try))
+               (range (car el))
+               (r1 (car range))
+               (r2 (cdr range)))
+          (cond
+            ((and (>= char r1) (<= char r2)) (cdr el))
+            ((< char r1) (get-next-state-helper char min try table))
+            (else (get-next-state-helper char (add1 try) max table))))))
+               
+          
+          
+  
+  (define (get-next-state char table)
+    (if table
+        (get-next-state-helper char 0 (vector-length table) table)
+        #f))
+  
+  (define (lexer-body start-state trans-table actions no-lookahead
+                       special-action special-error-action
+                       has-special-comment-action? special-comment-action eof-action wrap?)
+    (letrec ((lexer
+              (lambda (ip)
+                (unless (input-port? ip)
+                  (raise-type-error 
+                   'lexer 
+                   "input-port"
+                   0
+                   ip))
+                (let ((first-pos (get-position ip))
+                      (first-char (peek-char-or-special ip 0)))
+                  (cond
+                    ((eq? 'special first-char)
+                     (let* ((comment? #f)
+                            (error? #f)
+                            (spec (with-handlers ((exn:special-comment?
+                                                   (lambda (x) (set! comment? #t)))
+                                                  (not-break-exn?
+                                                   (lambda (ex) (set! error? #t) ex)))
+                                    (read-char-or-special ip))))
+                       (cond
+                         ((and comment? (not has-special-comment-action?))
+                          (lexer ip))
+                         (else
+                          (do-match ip first-pos (cond
+                                                   (comment? special-comment-action)
+                                                   (error? special-error-action)
+                                                   (else special-action))
+                                    spec wrap?)))))
+                    ((eof-object? first-char)
+                     (do-match ip first-pos eof-action (read-char-or-special ip) wrap?))
+                    (else
+                     (let lexer-loop (
+                                      ;; current-state
+                                      (state start-state)
+                                      ;; the character to transition on
+                                      (char first-char)
+                                      ;; action for the longest match seen thus far
+                                      ;; including a match at the current state
+                                      (longest-match-action 
+                                       (vector-ref actions start-state))
+                                      ;; how many characters have been read
+                                      ;; including the one just read
+                                      (length 1)
+                                      ;; how many characters are in the longest match
+                                      (longest-match-length 1))
+                       (let ((next-state 
+                              (cond
+                                ((eof-object? char) #f)
+                                ((eq? char 'special) #f)
+                                (else (get-next-state (char->integer char)
+                                                      (vector-ref trans-table state))))))
                          (cond
                            ((not next-state)
                             (check-match ip first-pos longest-match-length
