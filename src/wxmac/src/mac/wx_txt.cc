@@ -211,6 +211,8 @@ void wxText::CreateWxText(char* label, char* value) // common constructor initia
 		
 	if (GetParent()->IsHidden())
 		DoShow(FALSE);
+		
+	wx_cursor = wxIBEAM_CURSOR;
 }
 
 
