@@ -8,7 +8,8 @@
 	   (lib "list.ss"))
   
   (provide union build-lr0-automaton run-automaton (struct trans-key (st gs))
-	   lr0-transitions lr0-states kernel-items kernel-index for-each-state)
+	   lr0-transitions lr0-states lr0-epsilon-trans
+	   kernel-items kernel-index for-each-state)
 
   (define (union comp<?)
     (letrec ((union
@@ -29,24 +30,22 @@
   ;; kernel = (make-kernel (LR1-item list) index)
   ;;   the list must be kept sorted according to item<? so that equal? can
   ;;   be used to compare kernels
-  ;; LR0-automaton = (make-lr0 (trans-key kernel hash-table) (kernel vector))
+  ;; LR0-automaton = (make-lr0 (trans-key kernel hash-table) (kernel vector) (kernel item hashtable))
   ;; trans-key = (make-trans-key kernel gram-sym)
   (define-struct kernel (items index) (make-inspector))
   (define-struct trans-key (st gs) (make-inspector))
-  (define-struct lr0 (transitions states) (make-inspector))
+  (define-struct lr0 (transitions states epsilon-trans) (make-inspector))
 
-  ;; A macro to allow easy iteration over the states in an automaton
-  (define-syntax for-each-state
-    (syntax-rules ()
-      ((_ function automaton)
-       (let* ((states (lr0-states automaton))
-              (num-states (vector-length states)))
-         (let loop ((i 0))
-           (if (< i num-states)
-               (begin
-                 (function (vector-ref states i))
-                 (loop (add1 i)))))))))
-  
+  ;; Iteration over the states in an automaton
+  (define (for-each-state f a)
+    (let* ((states (lr0-states a))
+	   (num-states (vector-length states)))
+      (let loop ((i 0))
+	(if (< i num-states)
+	    (begin
+	      (f (vector-ref states i))
+	      (loop (add1 i)))))))
+ 
   ;; The kernels in the automaton are represented cannonically.
   ;; That is (equal? a b) <=> (eq? a b)
   (define (kernel->string k)
@@ -71,7 +70,7 @@
 	     (non-terms (list->vector (grammar-non-terms grammar)))
 	     (num-non-terms (vector-length non-terms))
 	     (num-gram-syms (+ num-non-terms (vector-length terms)))
-					 
+	     (epsilons (make-hash-table 'equal))
 	     
 	     ;; first-non-term: non-term -> non-term list
 	     ;; given a non-terminal symbol C, return those non-terminal 
@@ -136,6 +135,7 @@
 		      ;; maps each gram-syms to a list of items
 
 		      (table (make-vector num-gram-syms null))
+		      (epsilons (make-hash-table 'equal))
 
 		      ;; add-item!: 
 		      ;;   (item list) vector * item ->
@@ -144,18 +144,26 @@
 		      (add-item!
 		       (lambda (table i)
 			 (let ((gs (sym-at-dot i)))
-			   (if gs
-			       (let* ((add (if (term? gs)
-					       num-non-terms
-					       0))
-				      (already 
-				       (vector-ref table 
-						   (+ add 
-						      (gram-sym-index gs)))))
-				 (if (not (member i already))
-				     (vector-set! table 
-						  (+ add (gram-sym-index gs))
-						  (cons i already)))))))))
+			   (cond
+			    (gs
+			     (let* ((add (if (term? gs)
+					     num-non-terms
+					     0))
+				    (already 
+				     (vector-ref table 
+						 (+ add 
+						    (gram-sym-index gs)))))
+			       (if (not (member i already))
+				   (vector-set! table 
+						(+ add (gram-sym-index gs))
+						(cons i already)))))
+			    ((= 0 (vector-length (prod-rhs (item-prod i))))
+			     (let ((current (hash-table-get epsilons
+							    kernel
+							    (lambda () null))))
+			       (hash-table-put! epsilons
+						kernel
+						(cons i current)))))))))
 		  
 		  ;; Group the items of the LR0 closure of the kernel
 		  ;; by the character after the dot
@@ -231,7 +239,7 @@
 		 (seen-kernels null))
 	(cond
 	 ((and (empty-queue? new-kernels) (null? old-kernels))
-	  (make-lr0 automaton (list->vector (reverse! seen-kernels))))
+	  (make-lr0 automaton (list->vector (reverse! seen-kernels)) epsilons))
 	 ((null? old-kernels)
 	  (loop (deq! new-kernels) seen-kernels))
 	 (else 

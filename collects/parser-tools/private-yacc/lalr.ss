@@ -117,8 +117,6 @@
   (define (compute-LA a g)
     (let-values (((includes lookback) (compute-includes-and-lookback a g)))
       (let ((follow (compute-follow a g includes)))
-        (print-lookback lookback a g)
-        (print-follow follow a g)
 	(lambda (k p)
 	  (let* ((l (lookback k p))
 		 (f (map follow l)))

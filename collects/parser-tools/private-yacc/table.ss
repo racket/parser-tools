@@ -204,13 +204,11 @@
   ;; buile-table: grammar * string -> action2d-array
   (define (build-table g file)
     (let* ((a (build-lr0-automaton g))
-	   (get-state (lr0-states a))
 	   (terms (grammar-terms g))
 	   (non-terms (grammar-non-terms g))
 	   (get-term (list->vector terms))
 	   (get-non-term (list->vector non-terms))
 	   (get-prod (list->vector (grammar-prods g)))
-	   (num-states (vector-length get-state))
 	   (num-terms (vector-length get-term))
 	   (num-non-terms (vector-length get-non-term))
            (end-term-indexes 
@@ -219,7 +217,7 @@
                (+ num-non-terms (gram-sym-index term)))
              (grammar-end-terms g)))
 	   (num-gram-syms (+ num-terms num-non-terms))
-	   (table (make-array2d num-states num-gram-syms #f))
+	   (table (make-array2d (vector-length (lr0-states a)) num-gram-syms #f))
 	   (array2d-add!
 	    (lambda (v i1 i2 a)
 	      (let ((old (array2d-ref v i1 i2)))
@@ -240,9 +238,7 @@
                                (vector-ref get-non-term i)
                                (vector-ref get-term (- i num-non-terms))))
                         (goto
-                         (run-automaton (vector-ref get-state (kernel-index state))
-                                        s
-                                        a)))
+                         (run-automaton state s a)))
                    (if goto
                        (array2d-set! table 
                                      (kernel-index state) 
@@ -256,6 +252,7 @@
                                         (make-shift 
                                          (kernel-index goto)))))))
                  (loop (add1 i)))))
+
          (for-each
           (lambda (item)
             (for-each 
@@ -269,12 +266,12 @@
                                  (item-prod-index item)
                                  (gram-sym-index (prod-lhs (item-prod item)))
                                  (vector-length (prod-rhs (item-prod item))))))))
-             (get-lookahead (vector-ref get-state (kernel-index state))
-                            (item-prod item))))
-          (filter (lambda (item)
-                    (not (move-dot-right item)))
-                  (kernel-items
-                   (vector-ref get-state (kernel-index state))))))
+             (get-lookahead state (item-prod item))))
+	  
+          (append (hash-table-get (lr0-epsilon-trans a) state (lambda () null))
+		  (filter (lambda (item)
+			    (not (move-dot-right item)))
+			  (kernel-items state)))))
        a)
       (resolve-prec-conflicts a table get-term get-prod num-terms
                               num-non-terms)
@@ -293,4 +290,5 @@
       (resolve-conflicts a table num-terms num-non-terms)
       table))
 )
+
 
