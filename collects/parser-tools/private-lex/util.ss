@@ -106,75 +106,205 @@
                         null)
                '(5 1 2 3 4 1 2 3 2 1)))
   
-  ;; make-range : int * int -> char list
-  ;; creates a list of all chars between i and j.  i <= j
-  (define (make-range i j)
-    (letrec ((make-range 
-              (lambda (i j)
-                (cond
-                  ((= i j) (list (integer->char i)))
-                  (else 
-                   (cons (integer->char i) (make-range (add1 i) j)))))))
-      (make-range i j)))
+  
+  ;; A char-set is (list-of (cons nat nat))
+  ;; Each cons represents a range of characters, and the entire
+  ;; set is the union of the ranges.  The ranges must be disjoint and
+  ;; increasing.  Further, adjacent ranges must have at least
+  ;; one number between them.
+  
+  
+  (define (nat? x)
+    (and (integer? x) (exact? x) (>= x 0)))
+  
+  ;; char-set? : X -> bool
+  (define (char-set? x)
+    (let loop ((set x)
+               (current-num -2))
+      (or
+       (null? set)
+       (and (pair? set)
+            (pair? (car set))
+            (nat? (caar set))
+            (nat? (cdar set))
+            (< (add1 current-num) (caar set))
+            (<= (caar set) (cdar set))
+            (loop (cdr set) (cdar set))))))
   (test-block ()
-              ((make-range 97 110) (string->list "abcdefghijklmn"))
-              ((make-range 111 111) '(#\o)))
+              ((char-set? '((0 . 4) (7 . 9))) #t)
+              ((char-set? '((-1 . 4))) #f)
+              ((char-set? '((11 . 10))) #f)
+              ((char-set? '((0 . 10) (8 . 12))) #f)
+              ((char-set? '((10 . 20) (1 . 2))) #f)
+              ((char-set? '((1 . 1))) #t)
+              ((char-set? '((1 . 1) (2 . 3))) #f)
+              ((char-set? '((1 . 1) (3 . 3))) #t)
+              ((char-set? null) #t))
+               
+
+  
+  ;; make-range : int * int -> char-set
+  ;; creates a set of chars between i and j.  i <= j
+  (define (make-range i j)
+    (list (cons i j)))
+  (test-block ()
+              ((make-range 97 110) '((97 . 110)))
+              ((make-range 111 111) '((111 . 111))))
    
   
-
-  ;; merge : (list-of char) (list-of char) -> (list-of char)
-  ;; Combines 2 sorted, duplicate-free lists into 1, removing duplicates.
-  (define (merge l1 l2)
+  ;; sub-range? : (cons int int) (cons int int) -> bool
+  ;; true iff the interval [(car r1), (cdr r1)] is a subset of
+  ;; [(car r2), (cdr r2)]
+  (define (sub-range? r1 r2)
+    (and (>= (car r1) (car r2))
+         (<= (cdr r1) (cdr r2))))
+    
+  ;; overlap? : (cons int int) (cons int int) -> bool
+  ;; true iff the intervals [(car r1), (cdr r1)] and [(car r2), (cdr r2)]
+  ;; have non-empty intersections and (car r1) >= (car r2)
+  (define (overlap? r1 r2)
+    (and (>= (car r1) (car r2))
+         (>= (cdr r1) (cdr r2))
+         (<= (car r1) (cdr r2))))
+    
+  
+  ;; merge : char-set char-set -> char-set
+  ;; unions 2 char-sets
+  (define (merge s1 s2)
     (cond
-      ((null? l2) l1)
-      ((null? l1) l2)
-      (else (let ((cl1 (car l1))
-                  (cl2 (car l2)))
-              (cond
-                ((> (char->integer cl1) (char->integer cl2))
-                 (cons cl2 (merge l1 (cdr l2))))
-                ((< (char->integer cl1) (char->integer cl2))
-                 (cons cl1 (merge (cdr l1) l2)))
-                (else (merge (cdr l1) l2)))))))
+      ((null? s2) s1)
+      ((null? s1) s2)
+      (else 
+       (let ((r1 (car s1))
+             (r2 (car s2)))
+         (cond
+           ((sub-range? r1 r2) (merge (cdr s1) s2))
+           ((sub-range? r2 r1) (merge s1 (cdr s2)))
+           ((or (overlap? r1 r2) (= (car r1) (add1 (cdr r2))))
+            (merge (cons (cons (car r2) (cdr r1)) (cdr s1)) (cdr s2)))
+           ((or (overlap? r2 r1) (= (car r2) (add1 (cdr r1))))
+            (merge (cdr s1) (cons (cons (car r1) (cdr r2)) (cdr s2))))
+           ((< (car r1) (car r2))
+            (cons r1 (merge (cdr s1) s2)))
+           (else
+            (cons r2 (merge s1 (cdr s2)))))))))
   (test-block ()
-              ((merge (string->list "abcd")
-                      (string->list "abde"))
-               (string->list "abcde"))
               ((merge null null) null)
-              ((merge null '(#\1)) '(#\1))
-              ((merge '(#\1) null) '(#\1)))
- 
-  (define (split-acc l1 l2 i l1-i l2-i)
-    (cond
-      ((null? l1) (values (reverse! i) (reverse! l1-i) (reverse! (append! (reverse l2) l2-i))))
-      ((null? l2) (values (reverse! i) (reverse! (append! (reverse l1) l1-i)) (reverse! l2-i)))
-      (else (let ((cl1 (car l1))
-                  (cl2 (car l2)))
-              (cond
-                ((> (char->integer cl1) (char->integer cl2))
-                 (split-acc l1 (cdr l2) i l1-i (cons cl2 l2-i)))
-                ((< (char->integer cl1) (char->integer cl2))
-                 (split-acc (cdr l1) l2 i (cons cl1 l1-i) l2-i))
-                (else
-                 (split-acc (cdr l1) (cdr l2) (cons cl1 i) l1-i l2-i)))))))
-      
-  ;; split : (list-of char) (list-of char) -> (list-of char) (list-of char) (list-of char)
-  ;; Takes sorted, duplicate-free l1 and l2 and returns (l1 intersect l2),
-  ;; l1 - (l1 intersect l2) and l2 - (l1 intersect l2)
-  (define (split l1 l2)
-    (split-acc l1 l2 null null null))
+              ((merge null '((1 . 10))) '((1 . 10)))
+              ((merge '((1 . 10)) null) '((1 . 10)))
+              ;; r1 in r2
+              ((merge '((5 . 10)) '((5 . 10))) '((5 . 10)))
+              ((merge '((6 . 9)) '((5 . 10))) '((5 . 10)))
+              ((merge '((7 . 7)) '((5 . 10))) '((5 . 10)))
+              ;; r2 in r1
+              ((merge '((5 . 10)) '((5 . 10))) '((5 . 10)))
+              ((merge '((5 . 10)) '((6 . 9))) '((5 . 10)))
+              ((merge '((5 . 10)) '((7 . 7))) '((5 . 10)))
+              ;; r2 and r1 are disjoint
+              ((merge '((5 . 10)) '((12 . 14))) '((5 . 10) (12 . 14)))
+              ((merge '((12 . 14)) '((5 . 10))) '((5 . 10) (12 . 14)))
+              ;; r1 and r1 are adjacent
+              ((merge '((5 . 10)) '((11 . 13))) '((5 . 13)))
+              ((merge '((11 . 13)) '((5 . 10))) '((5 . 13)))
+              ;; r1 and r2 overlap
+              ((merge '((5 . 10)) '((7 . 14))) '((5 . 14)))
+              ((merge '((7 . 14)) '((5 . 10))) '((5 . 14)))
+              ((merge '((5 . 10)) '((10 . 14))) '((5 . 14)))
+              ((merge '((7 . 10)) '((5 . 7))) '((5 . 10)))
+              ;; with lists
+              ((merge '((1 . 1) (3 . 3) (5 . 10) (100 . 200))
+                      '((2 . 2) (10 . 12) (300 . 300)))
+               '((1 . 3) (5 . 12) (100 . 200) (300 . 300)))
+              ((merge '((1 . 1) (3 . 3) (5 . 5) (8 . 8) (10 . 10) (12 . 12))
+                      '((2 . 2) (4 . 4) (6 . 7) (9 . 9) (11 . 11)))
+               '((1 . 12)))
+              ((merge '((2 . 2) (4 . 4) (6 . 7) (9 . 9) (11 . 11))
+                      '((1 . 1) (3 . 3) (5 . 5) (8 . 8) (10 . 10) (12 . 12)))
+               '((1 . 12))))
+                      
   
+  ;; split-sub-range : (cons int int) (cons int int) -> char-set
+  ;; (subrange? r1 r2) must hold.
+  ;; returns [(car r2), (cdr r2)] - ([(car r1), (cdr r1)] intersect [(car r2), (cdr r2)]).
+  (define (split-sub-range r1 r2)
+    (let ((r1-car (car r1))
+          (r1-cdr (cdr r1))
+          (r2-car (car r2))
+          (r2-cdr (cdr r2)))
+      (cond
+        ((and (= r1-car r2-car) (= r1-cdr r2-cdr)) null)
+        ((= r1-car r2-car) (list (cons (add1 r1-cdr) r2-cdr)))
+        ((= r1-cdr r2-cdr) (list (cons r2-car (sub1 r1-car))))
+        (else
+         (list (cons r2-car (sub1 r1-car)) (cons (add1 r1-cdr) r2-cdr))))))
+
   (test-block ()
-              ((let-values (((a b c)
-                             (split (string->list "abcdghjkl")
-                                    (string->list "abdeijmn"))))
-                 (list a b c))
-               (list (string->list "abdj") (string->list "cghkl") (string->list "eimn")))
-              ((let-values (((a b c) (split null null)))
-                 (list a b c)) (list null null null))
-              ((let-values (((a b c) (split '(#\1) null)))
-                 (list a b c)) (list null '(#\1) null))
-              ((let-values (((a b c) (split null '(#\1))))
-                 (list a b c)) (list null null '(#\1))))
+              ((split-sub-range '(1 . 10) '(1 . 10)) '())
+              ((split-sub-range '(1 . 5) '(1 . 10)) '((6 . 10)))
+              ((split-sub-range '(2 . 10) '(1 . 10)) '((1 . 1)))
+              ((split-sub-range '(2 . 5) '(1 . 10)) '((1 . 1) (6 . 10))))
   
+  
+  (define (split-acc s1 s2 i s1-i s2-i)
+    (cond
+      ((null? s1) (values (reverse! i) (reverse! s1-i) (reverse! (append! (reverse s2) s2-i))))
+      ((null? s2) (values (reverse! i) (reverse! (append! (reverse s1) s1-i)) (reverse! s2-i)))
+      (else
+       (let ((r1 (car s1))
+             (r2 (car s2)))
+         (cond
+           ((sub-range? r1 r2)
+            (split-acc (cdr s1) (append (split-sub-range r1 r2) (cdr s2))
+                       (cons r1 i) s1-i s2-i))
+           ((sub-range? r2 r1)
+            (split-acc (append (split-sub-range r2 r1) (cdr s1)) (cdr s2)
+                       (cons r2 i) s1-i s2-i))
+           ((overlap? r1 r2)
+            (split-acc (cons (cons (add1 (cdr r2)) (cdr r1)) (cdr s1))
+                       (cdr s2)
+                       (cons (cons (car r1) (cdr r2)) i)
+                       s1-i 
+                       (cons (cons (car r2) (sub1 (car r1))) s2-i)))
+           ((overlap? r2 r1)
+            (split-acc (cdr s1)
+                       (cons (cons (add1 (cdr r1)) (cdr r2)) (cdr s2))
+                       (cons (cons (car r2) (cdr r1)) i)
+                       (cons (cons (car r1) (sub1 (car r2)))s1-i )
+                       s2-i))
+           ((< (car r1) (car r2))
+            (split-acc (cdr s1) s2 i (cons r1 s1-i) s2-i))
+           (else
+            (split-acc s1 (cdr s2) i s1-i (cons r2 s2-i))))))))
+  
+  ;; split : char-set -> char-set char-set char-set
+  ;; returns (l1 intersect l2), l1 - (l1 intersect l2) and l2 - (l1 intersect l2)
+  (define (split s1 s2)
+    (split-acc s1 s2 null null null))
+  
+  (test-block ((s (lambda (s1 s2)
+                    (call-with-values (lambda () (split s1 s2)) list))))
+              ((s null null) '(() () ()))
+              ((s '((1 . 10)) null) '(() ((1 . 10)) ()))
+              ((s null '((1 . 10))) '(() () ((1 . 10))))
+              ((s '((1 . 10)) null) '(() ((1 . 10)) ()))
+              ((s '((1 . 10)) '((1 . 10))) '(((1 . 10)) () ()))
+              ((s '((1 . 10)) '((2 . 5))) '(((2 . 5)) ((1 . 1) (6 . 10)) ()))
+              ((s '((2 . 5)) '((1 . 10))) '(((2 . 5)) () ((1 . 1) (6 . 10))))
+              ((s '((2 . 5)) '((5 . 10))) '(((5 . 5)) ((2 . 4)) ((6 . 10))))
+              ((s '((5 . 10)) '((2 . 5))) '(((5 . 5)) ((6 . 10)) ((2 . 4))))
+              ((s '((2 . 10)) '((5 . 14))) '(((5 . 10)) ((2 . 4)) ((11 . 14))))
+              ((s '((5 . 14)) '((2 . 10))) '(((5 . 10)) ((11 . 14)) ((2 . 4))))
+              ((s '((10 . 20)) '((30 . 50))) '(() ((10 . 20)) ((30 . 50))))
+              ((s '((100 . 200)) '((30 . 50))) '(() ((100 . 200)) ((30 . 50))))
+              ((s '((1 . 5) (7 . 9) (100 . 200) (500 . 600) (600 . 700))
+                  '((2 . 8) (50 . 60) (101 . 104) (105 . 220)))
+               '(((2 . 5) (7 . 8) (101 . 104) (105 . 200))
+                 ((1 . 1) (9 . 9) (100 . 100) (500 . 600) (600 . 700))
+                 ((6 . 6) (50 . 60) (201 . 220))))
+              ((s '((2 . 8) (50 . 60) (101 . 104) (105 . 220))
+                  '((1 . 5) (7 . 9) (100 . 200) (500 . 600) (600 . 700)))
+               '(((2 . 5) (7 . 8) (101 . 104) (105 . 200))
+                 ((6 . 6) (50 . 60) (201 . 220))
+                 ((1 . 1) (9 . 9) (100 . 100) (500 . 600) (600 . 700))))
+              )
   )

@@ -16,7 +16,7 @@
   ;; An re is either
   ;; - (make-epsilonR bool nat)
   ;; - (make-zeroR bool nat)
-  ;; - (make-char-setR bool nat (list-of char))  The list must be sorted
+  ;; - (make-char-setR bool nat char-set)
   ;; - (make-concatR bool nat re re)
   ;; - (make-repeatR bool nat re)
   ;; - (make-orR bool nat (list-of re))          Must not directly contain any orRs
@@ -64,7 +64,7 @@
   ;; ->re : s-re cache -> re
   (define (->re exp cache)
     (match exp
-      ((? char?) (build-char-set (list exp) cache))
+      ((? char?) (build-char-set (make-range (char->integer exp) (char->integer exp)) cache))
       ((? string?) (->re `(@ ,@(string->list exp)) cache))
       ((? re?) exp)
       (`(epsilon) (build-epsilon))
@@ -103,7 +103,7 @@
       (`(^ ,crs ...)
         (let ((cs (->re `(: ,@crs) cache)))
           (cond
-            ((zeroR? cs) (build-char-set (make-range 0 255) cache))
+            ((zeroR? cs) (build-char-set (make-range 0 (sub1 (expt 2 32))) cache))
             ((char-setR? cs)
              (build-char-set
               (let loop ((bad-chars (map char->integer
