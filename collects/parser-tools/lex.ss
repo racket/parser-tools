@@ -35,20 +35,25 @@
   
   (define file-path (make-parameter #f))
              
-  ;; wrap-action: syntax-object -> syntax-object
-  (define-for-syntax (wrap-action action)
-    (with-syntax ((action-stx action))
+  ;; wrap-action: syntax-object src-pos? -> syntax-object
+  (define-for-syntax (wrap-action action src-pos?)
+    (with-syntax ((action-stx 
+                   (if src-pos?
+                       #`(let/ec ret
+                           (syntax-parameterize 
+                            ((return-without-pos (make-rename-transformer #'ret)))
+                            (make-position-token #,action start-pos end-pos)))
+                        action)))
       (syntax/loc action
-        (lambda (start-pos-p end-pos-p lexeme-p return-without-pos-p input-port-p)
+        (lambda (start-pos-p end-pos-p lexeme-p input-port-p)
           (syntax-parameterize 
            ((start-pos (make-rename-transformer #'start-pos-p))
             (end-pos (make-rename-transformer #'end-pos-p))
             (lexeme (make-rename-transformer #'lexeme-p))
-            (return-without-pos (make-rename-transformer #'return-without-pos-p))
             (input-port (make-rename-transformer #'input-port-p)))
            action-stx)))))
         
-  (define-for-syntax (make-lexer-trans wrap?)
+  (define-for-syntax (make-lexer-trans src-pos?)
     (lambda (stx)
       (syntax-case stx ()
         ((_)
@@ -93,18 +98,17 @@
                              (no-lookahead-stx no-look)
                              (actions-stx
                               `(vector ,@(map (lambda (a)
-                                                (if a (wrap-action a) #f))
+                                                (if a (wrap-action a src-pos?) #f))
                                               (vector->list actions))))
                              (spec-act-stx
-                              (wrap-action spec-act))
+                              (wrap-action spec-act src-pos?))
                              (spec-error-act-stx
-                              (wrap-action spec-error-act))
+                              (wrap-action spec-error-act src-pos?))
                              (has-comment-act?-stx 
                               (if (syntax-e spec-comment-act) #t #f))
                              (spec-comment-act-stx
-                              (wrap-action spec-comment-act))
-                             (eof-act-stx (wrap-action eof-act))
-                             (wrap? wrap?))
+                              (wrap-action spec-comment-act src-pos?))
+                             (eof-act-stx (wrap-action eof-act src-pos?)))
                  (syntax-property
                   (syntax/loc stx
                    (lexer-body start-state-stx 
@@ -115,8 +119,7 @@
                                spec-error-act-stx
                                has-comment-act?-stx
                                spec-comment-act-stx
-                               eof-act-stx
-                               wrap?))
+                               eof-act-stx))
                   'disappeared-use
                   disappeared-uses)))))))))
 
@@ -197,21 +200,15 @@
   
   (define (lexer-body start-state trans-table actions no-lookahead
                       special-action special-error-action
-                      has-special-comment-action? special-comment-action eof-action wrap?)
+                      has-special-comment-action? special-comment-action eof-action)
     (letrec ((lexer
               (lambda (ip)
-                (unless (input-port? ip)
-                  (raise-type-error 
-                   'lexer 
-                   "input-port"
-                   0
-                   ip))
                 (let ((first-pos (get-position ip))
                       (first-char (peek-char-or-special ip 0)))
                   ;; (printf "(peek-char-or-special port 0) = ~e~n" first-char)
                   (cond
                     ((eof-object? first-char)
-                     (do-match ip first-pos eof-action (read-char-or-special ip) wrap?))
+                     (do-match ip first-pos eof-action (read-char-or-special ip)))
                     ((not (char? first-char))
                      (let* ((comment? #f)
                             (error? #f)
@@ -228,7 +225,7 @@
                                                    (comment? special-comment-action)
                                                    (error? special-error-action)
                                                    (else special-action))
-                                    spec wrap?)))))
+                                    spec)))))
                     (else
                      (let lexer-loop (
                                       ;; current-state
@@ -255,15 +252,14 @@
                          (cond
                            ((not next-state)
                             (check-match ip first-pos longest-match-length
-                                         length-chars longest-match-action wrap?))
+                                         length-chars longest-match-action))
                            ((vector-ref no-lookahead next-state)
                             (let ((act (vector-ref actions next-state)))
                               (check-match ip 
                                            first-pos 
                                            (if act length-chars longest-match-length)
                                            length-chars
-                                           (if act act longest-match-action)
-                                           wrap?)))
+                                           (if act act longest-match-action))))
                            (else
                             (let ((act (vector-ref actions next-state)))
                               (lexer-loop next-state 
@@ -276,11 +272,16 @@
                                           (if act
                                               length-chars
                                               longest-match-length)))))))))))))
-      lexer))
+      (lambda (ip)
+        (unless (input-port? ip)
+          (raise-type-error 
+           'lexer 
+           "input-port"
+           0
+           ip))
+        (lexer ip))))
       
-  (define id (lambda (x) x))
-
-  (define (check-match lb first-pos longest-match-length length longest-match-action wrap?)
+  (define (check-match lb first-pos longest-match-length length longest-match-action)
     (unless longest-match-action
       (let* ((match (read-string length lb))
 	     (end-pos (get-position lb)))
@@ -293,19 +294,11 @@
 	 (- (position-offset end-pos) (position-offset first-pos)))))
     (let ((match (read-string longest-match-length lb)))
       ;; (printf "(read-string ~e port) = ~e~n" longest-match-length match)
-      (do-match lb first-pos longest-match-action match wrap?)))
+      (do-match lb first-pos longest-match-action match)))
       
       
-  (define (do-match ip first-pos action value wrap?)
-    (let ((end-pos (get-position ip)))
-      (cond
-        (wrap?
-         (let/ec ret
-           (make-position-token (action first-pos end-pos value ret ip)
-                                first-pos 
-                                end-pos)))
-        (else 
-         (action first-pos end-pos value id ip)))))
+  (define (do-match ip first-pos action value)
+    (action first-pos (get-position ip) value ip))
   
   (define (get-position ip)
     (let-values (((line col off) (port-next-location ip)))
