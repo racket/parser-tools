@@ -218,6 +218,6 @@
   (define-struct position (offset line col))
   (define (get-position ip)
     (let-values (((line col off) (port-next-location ip)))
-      (make-position (add1 off) (if line (add1 line) #f) (if col (add1 col) #f))))
+      (make-position off line col)))
 
 )
