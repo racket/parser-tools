@@ -193,7 +193,7 @@
 		    (set-lex-buffer-line! 
 		     lb
 		     (sub1 (lex-buffer-line lb)))
-		    (set-lex-buffer-offset!
+		    (set-lex-buffer-col!
 		     lb
 		     (car (lex-buffer-line-lengths lb)))
 		    (set-lex-buffer-line-lengths!
