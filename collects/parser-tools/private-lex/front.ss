@@ -24,19 +24,26 @@
   
   ;; dfa->1d-table : dfa -> (same as build-lexer)
  (define (dfa->1d-table dfa)
-   (let ((state-table (make-vector (dfa-num-states dfa) #f)))
-     (for-each (lambda (trans)
-                 (let* ((from-state (car trans))
-                        (all-chars/to (cdr trans))
-                        (flat-all-chars/to
-                         (mergesort
-                          (apply append
-                                 (map (lambda (chars/to)
-                                        (let ((char-ranges (loc:integer-set-contents (car chars/to)))
-                                              (to (cdr chars/to)))
-                                          (map (lambda (char-range)
-                                                 (vector (car char-range) (cdr char-range) to)
-                                                 #;(cons char-range to))
+   (let ((state-table (make-vector (dfa-num-states dfa) #f))
+         (transition-cache (make-hash-table 'equal)))
+     (for-each
+      (lambda (trans)
+        (let* ((from-state (car trans))
+               (all-chars/to (cdr trans))
+               (flat-all-chars/to
+                (mergesort
+                 (apply append
+                   (map (lambda (chars/to)
+                          (let ((char-ranges (loc:integer-set-contents (car chars/to)))
+                                (to (cdr chars/to)))
+                            (map (lambda (char-range)
+                                   (let ((entry (vector (car char-range) (cdr char-range) to)))
+                                     (hash-table-get transition-cache entry
+                                                     (lambda ()
+                                                       (hash-table-put! transition-cache
+                                                                        entry
+                                                                        entry)
+                                                       entry))))
                                                char-ranges)))
                                       all-chars/to))
                           (lambda (a b)
@@ -144,9 +151,27 @@
 				 (cdr s-re-act)))
 			 s-re-acts))
            
-           (dfa (build-dfa re-acts cache)))
+           (dfa (build-dfa re-acts cache))
+           (table (dfa->1d-table dfa)))
       ;(print-dfa dfa)
-      ;(printf "states: ~a~n" (dfa-num-states dfa))
-      (values (dfa->1d-table dfa) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa)
+      #;(let ((num-states (vector-length table))
+            (num-vectors (length (filter values (vector->list table))))
+            (num-entries (apply + (map
+                                   (lambda (x) (if x (vector-length x) 0))
+                                   (vector->list table))))
+            (num-different-entries
+             (let ((ht (make-hash-table)))
+               (for-each
+                (lambda (x)
+                  (when x
+                    (for-each
+                     (lambda (y)
+                       (hash-table-put! ht y #t))
+                     (vector->list x))))
+                (vector->list table))
+               (length (hash-table-map ht cons)))))
+        (printf "size: ~aKB~n" (/ (* 4.0 (+ 2 num-states (* 2 num-vectors) num-entries
+                                          (* 5 num-different-entries))) 1024)))
+      (values table (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa)
               (unbox disappeared-uses))))
   )
