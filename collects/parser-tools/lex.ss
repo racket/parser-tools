@@ -18,7 +18,8 @@
 	   position-offset position-line position-col position?
            define-tokens define-empty-tokens token-name token-value token? file-path
            any-char any-string nothing alphabetic lower-case upper-case title-case
-           numeric symbolic punctuation graphic whitespace blank iso-control)
+           numeric symbolic punctuation graphic whitespace blank iso-control
+           char-set)
   
   (define file-path (make-parameter #f))
   
@@ -275,9 +276,10 @@
     (syntax-case stx ()
       ((_ ctxt)
        (with-syntax (((ranges ...) (map (lambda (range)
-                                          `(: ,@(map (lambda (x) `(- ,(integer->char (car x))
-                                                                     ,(integer->char (cdr x))))
-                                                     range)))
+                                          `(union ,@(map (lambda (x)
+                                                           `(char-range ,(integer->char (car x))
+                                                                        ,(integer->char (cdr x))))
+                                                         range)))
                                         (list (force alphabetic-ranges)
                                               (force lower-case-ranges)
                                               (force upper-case-ranges)
@@ -308,6 +310,13 @@
   (define-lex-abbrev any-string (intersection))
   (define-lex-abbrev nothing (union))
   (create-unicode-abbrevs #'here)
+  
+  (define-lex-trans (char-set stx)
+    (syntax-case stx ()
+      ((_ str)
+       (string? (syntax-e (syntax str)))
+       (with-syntax (((char ...) (string->list (syntax-e (syntax str)))))
+         (syntax (union char ...))))))
   
 
 )

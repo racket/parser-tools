@@ -50,7 +50,7 @@
   ;; s-re = char                       constant
   ;;      | string                     constant (sequence of characters)
   ;;      | re                         a precompiled re
-  ;;      | (repeat low high s-re)     repetition between low and high times (inclusive)
+  ;;      | (repetition low high s-re) repetition between low and high times (inclusive)
   ;;      | (union s-re ...)           
   ;;      | (intersection s-re ...)    
   ;;      | (complement s-re)          
@@ -60,7 +60,7 @@
   ;; low = natural-number
   ;; high = natural-number or +inf.0
   ;; rng = char or string with length 1
-  ;; (concatenation) (repeat 0 0 x), and "" match the empty string.
+  ;; (concatenation) (repetition 0 0 x), and "" match the empty string.
   ;; (union) matches no strings.
   ;; (intersection) matches any string.
   
@@ -75,7 +75,7 @@
       ((? char?) (build-char-set (loc:make-range (char->integer exp)) cache))
       ((? string?) (->re `(concatenation ,@(string->list exp)) cache))
       ((? re?) exp)
-      (`(repeat ,low ,high ,r)
+      (`(repetition ,low ,high ,r)
         (build-repeat low high (->re r cache) cache))
       (`(union ,rs ...)
         (build-or (flatten-res (map (lambda (r) (->re r cache)) rs)
@@ -332,19 +332,19 @@
                (r (->re #\a c))
                (rr (->re `(concatenation ,r ,r) c))
                (rrr (->re `(concatenation ,r ,rr) c))
-               (rrr* (->re `(repeat 0 +inf.0 ,rrr) c)))
+               (rrr* (->re `(repetition 0 +inf.0 ,rrr) c)))
               ((isc (char-setR-chars r)) (isc (is:make-range (char->integer #\a))))
               ((->re "" c) e)
               ((->re "asdf" c) (->re `(concatenation #\a #\s #\d #\f) c))
               ((->re r c) r)
-              ((->re `(repeat 0 +inf.0 ,r) c) (build-repeat 0 +inf.0 r c))
-              ((->re `(repeat 1 +inf.0 ,r) c) (build-repeat 1 +inf.0 r c))
-              ((->re `(repeat 0 1 ,r) c) (build-repeat 0 1 r c))
-              ((->re `(repeat 0 1 ,rrr*) c) rrr*)
+              ((->re `(repetition 0 +inf.0 ,r) c) (build-repeat 0 +inf.0 r c))
+              ((->re `(repetition 1 +inf.0 ,r) c) (build-repeat 1 +inf.0 r c))
+              ((->re `(repetition 0 1 ,r) c) (build-repeat 0 1 r c))
+              ((->re `(repetition 0 1 ,rrr*) c) rrr*)
               ((->re `(union (union (char-range #\a #\c)
                                     (char-complement (char-range #\000 #\110)
                                                      (char-range #\112 ,(integer->char max-char-num))))
-                         (union (repeat 0 +inf.0 #\2))) c)
+                         (union (repetition 0 +inf.0 #\2))) c)
                (build-or (list (build-char-set (is:union (is:make-range 73)
                                                          (is:make-range 97 99))
                                                c)
@@ -356,13 +356,13 @@
               ((->re `(intersection (intersection #\111 
                                                   (char-complement (char-range #\000 #\110)
                                                                    (char-range #\112 ,(integer->char max-char-num))))
-                         (intersection (repeat 0 +inf.0 #\2))) c)
+                         (intersection (repetition 0 +inf.0 #\2))) c)
                (build-and (list (build-char-set (is:make-range 73) c)
                                 (build-repeat 0 +inf.0 (build-char-set (is:make-range 50) c) c))
                           c))
               ((->re `(intersection (intersection #\000 (char-complement (char-range #\000 #\110)
                                                                          (char-range #\112 ,(integer->char max-char-num))))
-                                    (intersection (repeat 0 +inf.0 #\2))) c)
+                                    (intersection (repetition 0 +inf.0 #\2))) c)
                z)
               ((->re `(intersection ,rr ,rrr) c) (build-and (list rr rrr) c))
               ((->re `(intersection ,r) c) r)

@@ -102,7 +102,7 @@
             #f
             "not given an even number of characters"
             stx))
-         (syntax (/-only-chars #,@chars))))))
+         #`(/-only-chars #,@chars)))))
   
   (define-lex-trans /-only-chars
     (syntax-rules ()
