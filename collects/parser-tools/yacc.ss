@@ -179,7 +179,7 @@
                  (lambda (port)
                    (display-yacc (syntax-object->datum grammar) 
                                  tokens 
-                                 (syntax-object->datum start)
+                                 (map syntax-object->datum start)
                                  (if precs
                                      (syntax-object->datum precs)
                                      #f)
