@@ -136,10 +136,15 @@
 		    (cond
 		     ((null? rest) current-guess)
 		     ((shift? (car rest)) (car rest))
-		     ((< (reduce-prod-num (car rest))
-			 (reduce-prod-num current-guess))
+                     ((and (reduce? (car rest))
+                           (< (reduce-prod-num (car rest))
+                              (reduce-prod-num current-guess)))
 		      (loop (car rest) (cdr rest)))
-		     (else (loop current-guess (cdr rest))))))
+                     ((accept? (car rest))
+                      (fprintf (current-error-port) 
+                               "accept/reduce or accept/shift conflicts.  Check the grammar for useless cycles of productions~n"))
+		     (loop current-guess (cdr rest))
+                     (else (loop current-guess (cdr rest))))))
 		 (else entry)))))
       (send a for-each-state
        (lambda (state)
