@@ -29,9 +29,11 @@
                                   (map syntax->list 
                                        (syntax->list (syntax (((bound ...) ...) ...)))))))))
              (terms (get-term-list terms))
-             (precs (syntax-case precs ()
-                      ((_ (__ term ...) ...)
-                       (apply append (map syntax->list (syntax->list (syntax ((term ...) ...)))))))))
+             (precs (if precs
+                        (syntax-case precs ()
+                          ((_ (__ term ...) ...)
+                           (apply append (map syntax->list (syntax->list (syntax ((term ...) ...)))))))
+                        null)))
          `(if #f (let ,(map (lambda (bind)
                               `(,(strip bind) void))
                             (append terms binds))
