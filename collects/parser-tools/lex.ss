@@ -181,6 +181,7 @@
                    ip))
                 (let ((first-pos (get-position ip))
                       (first-char (peek-char-or-special ip 0)))
+                  ;; (printf "(peek-char-or-special port 0) = ~e~n" first-char)
                   (cond
                     ((eof-object? first-char)
                      (do-match ip first-pos eof-action (read-char-or-special ip) wrap?))
@@ -216,6 +217,7 @@
                                       (length 1)
                                       ;; how many characters are in the longest match
                                       (longest-match-length 1))
+                       ;; (printf "(peek-char-or-special port ~e) = ~e~n" (sub1 length) char)
                        (let ((next-state 
                               (cond
                                 ((eof-object? char) #f)
@@ -261,6 +263,7 @@
 	 (position-offset first-pos)
 	 (- (position-offset end-pos) (position-offset first-pos)))))
     (let ((match (read-string longest-match-length lb)))
+      ;; (printf "(read-string ~e port) = ~e~n" longest-match-length match)
       (do-match lb first-pos longest-match-action match wrap?)))
       
       
