@@ -224,29 +224,29 @@
   ;; build-table: grammar string bool -> parse-table
   (define (build-table g file suppress)
     (let* ((a (build-lr0-automaton g))
-           (term-list (send g get-terms))
-           (term-vector (list->vector term-list))
-           (non-term-list (send g get-non-terms))
+           (term-vector (list->vector (send g get-terms)))
            (end-terms (send g get-end-terms))
            (table (make-parse-table (send a get-num-states)))
-           (get-lookahead (compute-LA a g)))
+           (get-lookahead (time (compute-LA a g))))
+
+      (for-each
+       (lambda (trans-key/state)
+         (let ((from-state-index (kernel-index (trans-key-st (car trans-key/state))))
+               (gs (trans-key-gs (car trans-key/state)))
+               (to-state (cdr trans-key/state)))
+           (table-add! table from-state-index gs
+                       (cond
+                         ((non-term? gs)
+                          (make-goto (kernel-index to-state)))
+                         ((member gs end-terms)
+                          (make-accept))
+                         (else
+                          (make-shift 
+                           (kernel-index to-state)))))))
+       (send a get-transitions))
+
       (send a for-each-state
         (lambda (state)
-          (for-each
-           (lambda (gs)
-             (let ((goto (send a run-automaton state gs)))
-               (when goto
-                 (table-add! table (kernel-index state) gs
-                             (cond
-                               ((non-term? gs)
-                                (make-goto (kernel-index goto)))
-                               ((member gs end-terms)
-                                (make-accept))
-                               (else
-                                (make-shift 
-                                 (kernel-index goto))))))))
-           (append non-term-list term-list))
-          
           (for-each
            (lambda (item)
              (let ((item-prod (item-prod item)))
@@ -258,7 +258,6 @@
                                 (vector-ref term-vector term-index)
                                 (make-reduce item-prod))))
                 (get-lookahead state item-prod))))
-           
            (append (hash-table-get (send a get-epsilon-trans) state (lambda () null))
                    (filter (lambda (item)
                              (not (move-dot-right item)))

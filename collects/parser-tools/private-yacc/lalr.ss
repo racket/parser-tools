@@ -4,8 +4,6 @@
   
   (require "lr0.ss"
 	   "grammar.ss"
-	   "array2d.ss"
-           "graph.ss"
 	   (lib "list.ss")
 	   (lib "class.ss"))
 
@@ -35,18 +33,16 @@
           (map (lambda (x) (make-trans-key r x))
                (filter (lambda (non-term) (send a run-automaton r non-term))
                        nullable-non-terms))))))
-
+  
   ;; compute-read: LR0-automaton * grammar -> (trans-key -> term set)
   ;; output term set is represented in bit-vector form
   (define (compute-read a g)
     (let* ((dr (compute-DR a g))
 	   (reads (compute-reads a g)))
       (digraph-tk->terml (send a get-mapped-non-term-keys)
-                          reads
-                          dr
-                          (send a get-num-states)
-                          (send g get-num-terms)
-                          (send g get-num-non-terms))))
+                         reads
+                         dr
+                         (send a get-num-states))))
   ;; returns the list of all k such that state k transitions to state start on the
   ;; transitions in rhs (in order)
   (define (run-lr0-backward a rhs dot-pos start num-states)
@@ -125,11 +121,9 @@
       (digraph-tk->terml (send a get-mapped-non-term-keys)
                          includes
                          read
-                         (send a get-num-states)
-                         (send g get-num-terms)
-                         (send g get-num-non-terms))))
+                         (send a get-num-states))))
     
-  ;; compute-LA: LR0-automaton * grammar -> (kernel * prod -> term set)
+  ;; compute-LA: LR0-automaton * grammar -> kernel * prod -> term set
   ;; output term set is represented in bit-vector form
   (define (compute-LA a g)
     (let* ((includes (compute-includes a g))
@@ -202,43 +196,51 @@
 	(gram-sym-symbol (trans-key-gs p))))
      r))
 
+  ;; init-tk-map : int -> (vectorof hashtable?)
+  (define (init-tk-map n)
+    (let ((v (make-vector n #f)))
+      (let loop ((i (sub1 (vector-length v))))
+        (when (>= i 0)
+          (vector-set! v i (make-hash-table))
+          (loop (sub1 i))))
+      v))
+  
+  ;; lookup-tk-map : (vectorof (symbol? int hashtable)) -> trans-key? -> int
+  (define (lookup-tk-map map)
+    (lambda (tk)
+      (let ((st (trans-key-st tk))
+            (gs (trans-key-gs tk)))
+        (hash-table-get (vector-ref map (kernel-index st))
+                        (gram-sym-symbol gs)
+                        (lambda () 0)))))
+
+  ;; add-tk-map : (vectorof (symbol? int hashtable)) -> trans-key int -> 
+  (define (add-tk-map map)
+    (lambda (tk v)
+      (let ((st (trans-key-st tk))
+            (gs (trans-key-gs tk)))
+        (hash-table-put! (vector-ref map (kernel-index st))
+                         (gram-sym-symbol gs)
+                         v))))
+             
   ;; digraph-tk->terml: 
   ;;   (trans-key list) * (trans-key -> trans-key list) * (trans-key -> term list) * int * int * int
   ;;     -> (trans-key -> term list)
   ;; DeRemer and Pennello 1982
   ;; Computes (f x) = (f- x) union Union{(f y) | y in (edges x)}
   ;; A specialization of digraph in the file graph.ss
-  (define (digraph-tk->terml nodes edges f- num-states num-terms num-non-terms)
+  (define (digraph-tk->terml nodes edges f- num-states)
     (letrec (
 	     ;; Will map elements of trans-key to term sets represented as bit vectors
-	     (results-terms (make-array2d num-states num-terms 0))
-	     (results-non-terms (make-array2d num-states num-non-terms 0))
-
+	     (results (init-tk-map num-states))
+             
 	     ;; Maps elements of trans-keys to integers.
-	     (N-terms (make-array2d num-states num-terms 0))
-	     (N-non-terms (make-array2d num-states num-non-terms 0))
-
-	     (lookup-tk-map
-	      (lambda (map-term map-non-term)
-		(lambda (tk) 
-		  (let ((st (trans-key-st tk))
-			(gs (trans-key-gs tk)))
-		    (if (term? gs)
-			(array2d-ref map-term (kernel-index st) (term-index gs))
-			(array2d-ref map-non-term (kernel-index st) (non-term-index gs)))))))
-	     (add-tk-map
-	      (lambda (map-term map-non-term)
-		(lambda (tk v)
-		  (let ((st (trans-key-st tk))
-			(gs (trans-key-gs tk)))
-		    (if (term? gs)
-			(array2d-set! map-term (kernel-index st) (term-index gs) v)
-			(array2d-set! map-non-term (kernel-index st) (non-term-index gs) v))))))
-		      
-	     (get-N (lookup-tk-map N-terms N-non-terms))
-	     (set-N (add-tk-map N-terms N-non-terms))
-	     (get-f (lookup-tk-map results-terms results-non-terms))
-	     (set-f (add-tk-map results-terms results-non-terms))
+	     (N (init-tk-map num-states))
+             
+             (get-N (lookup-tk-map N))
+	     (set-N (add-tk-map N))
+	     (get-f (lookup-tk-map results))
+	     (set-f (add-tk-map results))
 	     
 	     (stack null)
 	     (push (lambda (x)
@@ -257,20 +259,20 @@
 		  (set-N x d)
 		  (set-f x (f- x))
 		  (for-each (lambda (y)
-			      (if (= 0 (get-N y))
-				  (traverse y))
+			      (when (= 0 (get-N y))
+                                (traverse y))
 			      (set-f x (bitwise-ior (get-f x) (get-f y)))
 			      (set-N x (min (get-N x) (get-N y))))
 			    (edges x))
-		  (if (= d (get-N x))
-		      (let loop ((p (pop)))
-			(set-N p +inf.0)
-			(set-f p (get-f x))
-			(if (not (equal? x p))
-			    (loop (pop)))))))))
+		  (when (= d (get-N x))
+                    (let loop ((p (pop)))
+                      (set-N p +inf.0)
+                      (set-f p (get-f x))
+                      (unless (equal? x p)
+                        (loop (pop)))))))))
       (for-each (lambda (x)
-		  (if (= 0 (get-N x))
-		      (traverse x)))
+		  (when (= 0 (get-N x))
+                    (traverse x)))
 		nodes)
       get-f))
 )
