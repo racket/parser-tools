@@ -175,8 +175,8 @@
                                                         ,(if src-pos
                                                              `(err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
                                                              `(err #t (token-name tok) (token-value tok)))
-							(raise-read-error (format "parser: got token of unknown type ~a" (token-name tok)))))))))
-								
+							(raise-read-error (format "parser: got token of unknown type ~a" (token-name tok))
+                                                                          #f #f #f #f #f)))))))
                (lambda (get-token)
                  (let parsing-loop ((stack (list 0))
 				    (ip (get-token)))
