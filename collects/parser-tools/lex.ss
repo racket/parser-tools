@@ -7,7 +7,8 @@
                       "private-lex/structs.ss")
 
   (require (lib "readerr.ss" "syntax")
-           "private-lex/token.ss")
+           "private-lex/token.ss"
+	   (lib "cffi.ss" "compiler"))
 
   (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs
 	   make-lex-buf
@@ -32,24 +33,50 @@
                                                 x))))
                      (syntax->list (syntax (re-act ...))))
                     (let ((table (generate-table (syntax (re-act ...)) stx)))
-                      (with-syntax ((start-state-stx (table-start table))
-                                    (trans-table-stx (table-trans table))
-                                    (eof-table-stx (table-eof table))
-                                    (no-lookahead-stx (table-no-lookahead table))
+                      (with-syntax ((code (compile-table table))
                                     (actions-stx `(vector ,@(vector->list (table-actions table))))
                                     (wrap? wrap?))
-                        (syntax 
-                         (lexer-body start-state-stx 
-                                     trans-table-stx
-                                     eof-table-stx
-                                     actions-stx
-                                     no-lookahead-stx
-                                     wrap?)))))))))))
+                        (syntax
+                         (compiled-lexer-body code actions-stx wrap?)))))))))))
       (values
        (build-lexer #f)
        (build-lexer #t))))
 
-  
+  (define-syntaxes (lexer-old lexer-src-pos-old)
+    (let ((build-lexer
+	   (lambda (wrap?)
+	     (lambda (stx)
+	       (syntax-case stx ()
+		 ((_)
+		  (raise-syntax-error #f "empty lexer is not allowed" stx))
+		 ((_ re-act ...)
+		  (begin
+		    (for-each
+		     (lambda (x)
+		       (syntax-case x ()
+			 ((re act) (void))
+			 (_ (raise-syntax-error 'lexer 
+						"expects regular expression / action pairs"
+						x))))
+		     (syntax->list (syntax (re-act ...))))
+		    (let ((table (generate-table (syntax (re-act ...)) stx)))
+		      (with-syntax ((start-state-stx (table-start table))
+				    (trans-table-stx (table-trans table))
+				    (eof-table-stx (table-eof table))
+				    (no-lookahead-stx (table-no-lookahead table))
+				    (actions-stx `(vector ,@(vector->list (table-actions table))))
+				    (wrap? wrap?))
+			(syntax 
+			 (lexer-body start-state-stx 
+				     trans-table-stx
+				     eof-table-stx
+				     actions-stx
+				     no-lookahead-stx
+				     wrap?)))))))))))
+      (values
+       (build-lexer #f)
+       (build-lexer #t))))
+
   (define-syntax (define-lex-abbrev stx)
     (syntax-case stx ()
       ((_ name re)
@@ -86,6 +113,19 @@
         "Form should be (define-lex-abbrevs (name re) ...)"
         stx))))
 
+  (define (compiled-lexer-body lexer actions wrap?)
+    (lambda (lb)
+      (unless (lex-buffer? lb)
+        (raise-type-error 
+         'lexer 
+         "lex-buf"
+         0
+         lb))
+      (let ((first-pos (get-position lb)))
+        (let-values (((longest-match-length longest-match-action)
+                      (lexer lb next-char)))
+          (do-match lb first-pos longest-match-length (vector-ref actions longest-match-action) wrap?)))))
+  
   (define (lexer-body start-state trans-table eof-table actions no-lookahead wrap?)
     (lambda (lb)
       (unless (lex-buffer? lb)
