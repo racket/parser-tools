@@ -70,7 +70,7 @@
   (define-lex-trans ~
     (syntax-rules ()
       ((_ re ...)
-       (complement (union re ...)))))
+       (char-complement (union re ...)))))
   
   (define-lex-trans (sre-- stx)
     (syntax-case stx ()
