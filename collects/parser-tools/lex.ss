@@ -302,6 +302,8 @@
       
       
   (define (do-match ip first-pos action value)
+    #;(printf "(action ~a ~a ~a ~a)~n" 
+            (position-offset first-pos) (position-offset (get-position ip)) value ip)
     (action first-pos (get-position ip) value ip))
   
   (define (get-position ip)
