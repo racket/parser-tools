@@ -191,8 +191,8 @@
            #f
            value
            (list source 
-                 (add1 (position-line start-pos))
-                 (add1 (position-col start-pos))
+                 (position-line start-pos)
+                 (position-col start-pos)
                  (position-offset start-pos)
                  (- (position-offset end-pos)
                     (position-offset start-pos)))
