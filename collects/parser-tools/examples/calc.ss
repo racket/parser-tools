@@ -13,14 +13,8 @@
 (define vars (make-hash-table))
 
 (define-lex-abbrevs
- (lower-letter (- a z))
+ (lower-letter (- "a" "z"))
 
- ;; In the following line if we used (- A Z) dr/mzscheme would read it as (- a z) if
- ;; case-sensitivity is not enabled.  (- #\A #\Z) will not be altered because dr/mzscheme
- ;; reads them as character constants and not as symbols.  (- "A" "Z") would work as well
- ;; since dr/mzscheme would read them as strings.  The lexer generator treates single character
- ;; strings and symbols the same as an actual #\ character.  #cs(- A Z) works too because the #cs
- ;; tells dr/mzscheme to read the next expression with case-sensitivity turned on.
  (upper-letter (- #\A #\Z))
 
  ;; (- 0 9) would not work because the lexer does not understand numbers.  (- #\0 #\9) is ok too.
@@ -34,17 +28,15 @@
    [(: #\tab #\space) (calcl input-port)]
    ;; The parser will treat the return of 'newline the same as (token-newline)
    [#\newline 'newline]
-   [(: = + - * / ^) (string->symbol lexeme)]
+   [(: "=" "+" "-" "*" "/" "^") (string->symbol lexeme)]
    ["(" 'OP]
    [")" 'CP]
-   [sin (token-FNCT sin)]
-   ;; It the parens are left off of an "invocation" of an abbreviation, it means the
-   ;; character sequence instead.
-   [(+ (: (lower-letter) (upper-letter))) (token-VAR (string->symbol lexeme))]
-   [(+ (digit)) (token-NUM (string->number lexeme))]
+   ["sin" (token-FNCT sin)]
+   [(+ (: lower-letter upper-letter)) (token-VAR (string->symbol lexeme))]
+   [(+ digit) (token-NUM (string->number lexeme))]
    ;; Strings which dr/mzscheme does not think of as symbols (such as . or ,) must be
    ;; entered as a string or character.  "." would also be ok.
-   [(@ (+ (digit)) #\. (* (digit))) (token-NUM (string->number lexeme))]))
+   [(@ (+ digit) #\. (* digit)) (token-NUM (string->number lexeme))]))
    
 
 (define calcp
