@@ -1,9 +1,9 @@
 #cs
-(module terminal mzscheme
+(module token mzscheme
 
   ;; Defining tokens
   
-  (require-for-syntax "terminal-syntax.ss")
+  (require-for-syntax "token-syntax.ss")
 
   (provide define-tokens define-empty-tokens token-name token-value token?)
 

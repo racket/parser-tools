@@ -4,7 +4,7 @@
   ;; routines for parsing the input to the parser generator and producing a
   ;; grammar (See grammar.ss)
   
-  (require "yacc-helper.ss" "terminal-syntax.ss" "grammar.ss" (lib "list.ss"))
+  (require "yacc-helper.ss" "../private-lex/token-syntax.ss" "grammar.ss" (lib "list.ss"))
 
   (provide parse-input)
 

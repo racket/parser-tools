@@ -5,10 +5,12 @@
 	
   (require-for-syntax "private-lex/generate-code.ss")
   (require-for-syntax "private-lex/structs.ss")
-  (require (lib "list.ss"))
+  (require (lib "list.ss")
+           "private-lex/token.ss")
   (provide lex define-lex-abbrev define-lex-abbrevs
 	   make-lex-buf
-	   get-position position-offset position-line position-col position?)
+	   get-position position-offset position-line position-col position?
+           define-tokens define-empty-tokens)
 
 
   (define-syntax lex
@@ -91,19 +93,45 @@
 				 ,code)))
 			(datum->syntax-object #'here code #f)))))))
   
-
-
+  
+  
   (define-syntax define-lex-abbrev
-    (syntax-rules ()
-      ((_ name val) (define-syntax name
-		      (make-lex-abbrev (quote-syntax val))))))
+    (lambda (stx)
+      (syntax-case stx ()
+        ((_ name val)
+         (syntax
+          (define-syntax name
+            (make-lex-abbrev (quote-syntax val)))))
+        (_ 
+         (raise-syntax-error
+          #f
+          "Form should be (define-lex-abbrev name val)"
+          stx)))))
 
   (define-syntax define-lex-abbrevs
-    (syntax-rules ()
-      ((_ (name val) ...)
-       (define-syntaxes (name ...)
-	 (values (make-lex-abbrev (quote-syntax val)) ...)))))
-
+    (lambda (stx)
+      (syntax-case stx ()
+        ((_ x ...)
+         (let* ((abbrev (syntax->list (syntax (x ...))))
+                (r (map (lambda (a)
+                          (syntax-case a ()
+                            ((name val)
+                             (identifier? (syntax name))
+                             (syntax (define-lex-abbrev name val)))
+                            (_ (raise-syntax-error
+                                #f 
+                                "Lexer abbreviation must be (identifier value)"
+                                a))))
+                        abbrev)))
+           (datum->syntax-object
+            #'here
+            (cons 'begin r)
+            stx)))
+        (_
+         (raise-syntax-error
+          #f
+          "Form should be (define-lex-abbrevs (name val) ...)"
+          stx)))))
 
   ;; Lex buffer is NOT thread safe
 

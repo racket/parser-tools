@@ -3,11 +3,11 @@
 
   (require-for-syntax "private-yacc/parser-builder.ss"
                       "private-yacc/yacc-helper.ss")
-  (require "private-yacc/terminal.ss" 
-           "private-yacc/parser-actions.ss"
-           "private-yacc/array2d.ss")
+  (require "private-yacc/parser-actions.ss"
+           "private-yacc/array2d.ss"
+           "private-lex/token.ss")
   
-  (provide define-tokens define-empty-tokens parser)
+  (provide parser)
 
   (define-syntax parser
     (lambda (stx)
