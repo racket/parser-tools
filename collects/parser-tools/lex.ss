@@ -85,47 +85,47 @@
 	    (not (andmap (lambda (x) (>= x 0)) offsets)))
 	(raise-type-error 'make-lex-buf "list of 3 non-negative exact integers" 1 ip offsets))
        (else
-	(make-lex-buffer ip null null (add1 (caddr offsets)) (add1 (car offsets)) (add1 (cadr offsets)) null null))))))
+	(make-lex-buffer ip null null (caddr offsets) (car offsets) (cadr offsets) null null))))))
+
+  (define (get-next lb)
+    (cond
+     ((null? (lex-buffer-from lb)) 
+      (read-char (lex-buffer-ip lb)))
+     (else 
+      (begin0
+       (car (lex-buffer-from lb))
+       (set-lex-buffer-from! lb (cdr (lex-buffer-from lb)))))))
 
   ;; next-char: lex-buf -> c
   ;; gets the next character from the buffer
   (define (next-char lb)
-    (let ((get-next
-           (lambda ()
-	     (cond
-	      ((null? (lex-buffer-from lb)) 
-	       (read-char (lex-buffer-ip lb)))
-	      (else 
-	       (begin0
-		(car (lex-buffer-from lb))
-		(set-lex-buffer-from! lb (cdr (lex-buffer-from lb)))))))))
-      (let ((char-in
-	     (let ((real-char (get-next)))
-	       (if (eq? #\return real-char)
-		   (let ((second-char (get-next)))
-		     (if (not (eq? second-char #\newline))
-			 (set-lex-buffer-from! 
-			  lb 
-			  (cons second-char (lex-buffer-from lb))))
-		     #\newline)
-		   real-char))))
-	(set-lex-buffer-to! lb (cons char-in (lex-buffer-to lb)))
-	(cond 
-	 ((eq? #\tab char-in)
-	  (let ((skip-amt (- 8 (modulo (lex-buffer-col lb) 8))))
-            (set-lex-buffer-tab-skips! lb (cons skip-amt (lex-buffer-tab-skips lb)))
-	    (set-lex-buffer-col! lb (+ skip-amt (lex-buffer-col lb)))))
-	 ((eq? #\newline char-in)
-	  (set-lex-buffer-line-lengths!
-	   lb
-	   (cons (lex-buffer-col lb)
-		 (lex-buffer-line-lengths lb)))
-	  (set-lex-buffer-line! lb (add1 (lex-buffer-line lb)))
-	  (set-lex-buffer-col! lb 1))
-	 (else
-	  (set-lex-buffer-col! lb (add1 (lex-buffer-col lb)))))
-        (set-lex-buffer-offset! lb (add1 (lex-buffer-offset lb)))
-        char-in)))
+    (let ((char-in
+	   (let ((real-char (get-next lb)))
+	     (if (eq? #\return real-char)
+		 (let ((second-char (get-next)))
+		   (if (not (eq? second-char #\newline))
+		       (set-lex-buffer-from! 
+			lb 
+			(cons second-char (lex-buffer-from lb))))
+		   #\newline)
+		 real-char))))
+      (set-lex-buffer-to! lb (cons char-in (lex-buffer-to lb)))
+      (cond 
+       ((eq? #\tab char-in)
+	(let ((skip-amt (- 8 (modulo (lex-buffer-col lb) 8))))
+	  (set-lex-buffer-tab-skips! lb (cons skip-amt (lex-buffer-tab-skips lb)))
+	  (set-lex-buffer-col! lb (+ skip-amt (lex-buffer-col lb)))))
+       ((eq? #\newline char-in)
+	(set-lex-buffer-line-lengths!
+	 lb
+	 (cons (lex-buffer-col lb)
+	       (lex-buffer-line-lengths lb)))
+	(set-lex-buffer-line! lb (add1 (lex-buffer-line lb)))
+	(set-lex-buffer-col! lb 1))
+       (else
+	(set-lex-buffer-col! lb (add1 (lex-buffer-col lb)))))
+      (set-lex-buffer-offset! lb (add1 (lex-buffer-offset lb)))
+      char-in))
   
   ;; push-back: lex-buf * int -> c list
   ;; pushes the last read i characters back to be read again
