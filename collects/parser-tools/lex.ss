@@ -14,7 +14,6 @@
 	   get-position position-offset position-line position-col position?
            define-tokens define-empty-tokens)
   
-  
   (define-syntaxes (lexer lexer-src-pos)
     (let ((build-lexer
            (lambda (wrap?)
@@ -37,22 +36,15 @@
                                     (trans-table-stx (table-trans table))
                                     (eof-table-stx (table-eof table))
                                     (no-lookahead-stx (table-no-lookahead table))
-                                    (actions-stx `(vector ,@(vector->list (table-actions table)))))
-                        (if wrap?
-                            (syntax 
-                             (lexer-body start-state-stx 
-                                         trans-table-stx
-                                         eof-table-stx
-                                         actions-stx
-                                         no-lookahead-stx
-                                         #t))
-                            (syntax 
-                             (lexer-body start-state-stx 
-                                         trans-table-stx
-                                         eof-table-stx
-                                         actions-stx
-                                         no-lookahead-stx
-                                         #f))))))))))))
+                                    (actions-stx `(vector ,@(vector->list (table-actions table))))
+                                    (wrap? wrap?))
+                        (syntax 
+                         (lexer-body start-state-stx 
+                                     trans-table-stx
+                                     eof-table-stx
+                                     actions-stx
+                                     no-lookahead-stx
+                                     wrap?)))))))))))
       (values
        (build-lexer #f)
        (build-lexer #t))))
