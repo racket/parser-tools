@@ -1,4 +1,3 @@
-#cs
 (module table mzscheme
 
   ;; Routine to build the LALR table

@@ -1,7 +1,6 @@
 ;; Constructs to create and access grammars, the internal
 ;; representation of the input to the parser generator.
 
-#cs
 (module grammar mzscheme
   
   (require (lib "class.ss")

@@ -1,4 +1,3 @@
-#cs
 (module input-file-parser mzscheme
 
   ;; routines for parsing the input to the parser generator and producing a

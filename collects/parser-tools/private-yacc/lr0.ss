@@ -1,4 +1,3 @@
-#cs
 (module lr0 mzscheme
 
   ;; Handle the LR0 automaton

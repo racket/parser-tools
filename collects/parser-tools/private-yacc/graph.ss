@@ -1,4 +1,3 @@
-#cs
 (module graph mzscheme
 
   (provide digraph)

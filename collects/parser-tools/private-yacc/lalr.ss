@@ -1,4 +1,3 @@
-#cs
 (module lalr mzscheme
   
   ;; Compute LALR lookaheads from DeRemer and Pennello 1982

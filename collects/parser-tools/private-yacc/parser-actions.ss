@@ -1,4 +1,3 @@
-#cs
 (module parser-actions mzscheme
 
   ;; The entries into the action table

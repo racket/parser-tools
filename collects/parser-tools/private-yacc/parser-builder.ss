@@ -1,4 +1,3 @@
-#cs
 (module parser-builder mzscheme
   
   (require "input-file-parser.ss"

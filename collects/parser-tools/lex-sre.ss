@@ -13,7 +13,8 @@
            &
            ~
            (rename sre-- -)
-           (rename sre-/ /)/-only-chars)
+           (rename sre-/ /)
+           /-only-chars)
            
   (define-lex-trans sre-*
     (syntax-rules ()
@@ -72,6 +73,7 @@
       ((_ re ...)
        (char-complement (union re ...)))))
   
+  ;; char-set difference
   (define-lex-trans (sre-- stx)
     (syntax-case stx ()
       ((_)
@@ -79,7 +81,7 @@
                            "must have at least one argument"
                            stx))
       ((_ big-re re ...)
-       (syntax (intersect big-re (complement (union re) ...))))))
+       (syntax (intersect big-re (~ (union re) ...))))))
   
   (define-lex-trans (sre-/ stx)
     (syntax-case stx ()

@@ -11,14 +11,23 @@
                       
 
   (require (lib "readerr.ss" "syntax")
-	   (lib "cffi.ss" "compiler")
            "private-lex/token.ss")
 
   (provide lexer lexer-src-pos define-lex-abbrev define-lex-abbrevs define-lex-trans
-	   position-offset position-line position-col position?
-           define-tokens define-empty-tokens token-name token-value token? file-path
+           
+           ;; Dealing with tokens and related structures 
+           define-tokens define-empty-tokens token-name token-value token?
+           (struct position (offset line col))
+           (struct position-token (token start-pos end-pos))
+           
+           ;; File path for highlighting errors while lexing
+           file-path
+           
+           ;; Lex abbrevs for unicode char sets.  See mzscheme manual section 3.4.
            any-char any-string nothing alphabetic lower-case upper-case title-case
            numeric symbolic punctuation graphic whitespace blank iso-control
+
+           ;; A regular expression operator
            char-set)
   
   (define file-path (make-parameter #f))
@@ -260,18 +269,16 @@
       (cond
         (wrap?
          (let/ec ret
-           (list (action first-pos end-pos value ret ip)
-                 first-pos 
-                 end-pos)))
+           (make-position-token (action first-pos end-pos value ret ip)
+                                first-pos 
+                                end-pos)))
         (else 
          (action first-pos end-pos value id ip)))))
   
-  (define-struct position (offset line col))
   (define (get-position ip)
     (let-values (((line col off) (port-next-location ip)))
       (make-position off line col)))
-  
-  
+
   (define-syntax (create-unicode-abbrevs stx)
     (syntax-case stx ()
       ((_ ctxt)

@@ -1,4 +1,3 @@
-#cs
 (module yacc-helper mzscheme
 
   (require (lib "list.ss")

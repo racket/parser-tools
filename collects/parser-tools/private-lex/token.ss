@@ -1,14 +1,45 @@
-#cs
 (module token mzscheme
 
   (require-for-syntax "token-syntax.ss")
   
   ;; Defining tokens
   
-  (provide define-tokens define-empty-tokens make-token token-name token-value token?)
+  (provide define-tokens define-empty-tokens make-token token?
+           (protect (rename token-name real-token-name))
+           (protect (rename token-value real-token-value))
+           (rename token-name* token-name)
+           (rename token-value* token-value)
+           (struct position (offset line col))
+           (struct position-token (token start-pos end-pos)))
 
-  (define-struct token (name value) (make-inspector))
+  
+  ;; A token is either
+  ;; - symbol
+  ;; - (make-token symbol any)
+  (define-struct token (name value))
 
+  ;; token-name*: token -> symbol
+  (define (token-name* t)
+    (cond
+      ((symbol? t) t)
+      ((token? t) (token-name t))
+      (else (raise-type-error 
+             'token-name 
+             "symbol or struct:token"
+             0
+             t))))
+  
+  ;; token-value*: token -> any
+  (define (token-value* t)
+    (cond
+      ((symbol? t) #f)
+      ((token? t) (token-value t))
+      (else (raise-type-error 
+             'token-value
+             "symbol or struct:token"
+             0
+             t))))
+  
   (define-syntaxes (define-tokens define-empty-tokens)
     (let ((define-tokens-helper 
            (lambda (stx empty?)
@@ -36,8 +67,10 @@
                                      n
                                      n)
                                    ,@(if empty? '() '(x)))
-                            (make-token ',n ,(if empty? #f 'x))))
-                       (syntax->list (syntax (terms ...)))))	
+                            ,(if empty?
+                                 `',n
+                                 `(make-token ',n x))))
+                       (syntax->list (syntax (terms ...)))))
                  stx))
                ((_ ...)
                 (raise-syntax-error 
@@ -47,5 +80,8 @@
       (values
        (lambda (stx) (define-tokens-helper stx #f))
        (lambda (stx) (define-tokens-helper stx #t)))))
-)
+
+  (define-struct position (offset line col))
+  (define-struct position-token (token start-pos end-pos))
+  )
 
