@@ -12,19 +12,36 @@
     (let* ((grammar (parse-input start end input-terms assocs prods runtime))
            (table (build-table grammar filename))
            (table-code 
-            (cons 'vector 
-                  (map (lambda (action)
+            `((lambda (table-list)
+                (let ((v (list->vector table-list)))
+                  (let loop ((i 0))
+                    (cond
+                      ((< i (vector-length v))
+                       (let ((vi (vector-ref v i)))
                          (cond
-                           ((shift? action)
-                            `(make-shift ,(shift-state action)))
-                           ((reduce? action)
-                            `(make-reduce ,(reduce-prod-num action)
-                                          ,(reduce-lhs-num action)
-                                          ,(reduce-rhs-length action)))
-                           ((accept? action)
-                            `(make-accept))
-                           (else action)))
-                       (vector->list table))))
+                           ((list? vi) 
+                            (vector-set! v i
+                                         (cond
+                                           ((eq? 's (car vi))
+                                            (make-shift (cadr vi)))
+                                           ((eq? 'r (car vi))
+                                            (make-reduce (cadr vi) (caddr vi) (cadddr vi)))
+                                           ((eq? 'a (car vi)) (make-accept)))))))
+                       (loop (add1 i)))
+                      (else v)))))
+              (quote
+               ,(map (lambda (action)
+                       (cond
+                         ((shift? action)
+                          `(s ,(shift-state action)))
+                         ((reduce? action)
+                          `(r ,(reduce-prod-num action)
+                              ,(reduce-lhs-num action)
+                              ,(reduce-rhs-length action)))
+                         ((accept? action)
+                          `(a))
+                         (else action)))
+                     (vector->list table)))))
             
            (num-non-terms (length (grammar-non-terms grammar)))
 

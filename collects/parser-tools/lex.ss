@@ -10,7 +10,7 @@
   (provide lex define-lex-abbrev define-lex-abbrevs
 	   make-lex-buf
 	   get-position position-offset position-line position-col position?
-           define-tokens define-empty-tokens)
+           define-tokens define-empty-tokens token-value token-name token?)
 
 
   (define-syntax lex
