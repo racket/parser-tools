@@ -121,7 +121,7 @@
                        ;; including the one just read
                        (length 1)
                        ;; how many characters are in the longest match
-                       (longest-match-length 0))
+                       (longest-match-length 1))
         (let ((next-state
                (cond
                  ((eof-object? char)
