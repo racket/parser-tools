@@ -90,6 +90,28 @@
                       (table ,table-code)
                       (term-sym->index ,token-code)
                       (actions ,actions-code)
+                      (input->token
+                       (lambda (ip)
+                         ,(if src-pos 
+                              `(cond
+                                 ((and (list? ip) (= 3 (length ip)))
+                                  (let ((tok (car ip)))
+                                    (cond
+                                      ((symbol? tok) (make-token tok #f))
+                                      ((token? tok) tok)
+                                      (else (raise-type-error 'parser 
+                                                              "(list (token or symbol) position position)"
+                                                              0 
+                                                              ip)))))
+                                 (else
+                                  (raise-type-error 'parser 
+                                                    "(list (token or symbol) position position)"
+                                                    0
+                                                    ip)))
+                              `(cond
+                                 ((symbol? ip) (make-token ip #f))
+                                 ((token? ip) ip)
+                                 (else (raise-type-error 'parser "token or symbol" 0 ip))))))
                       (reduce-stack
                        (lambda (s n v)
                          (if (> n 0)
@@ -98,45 +120,53 @@
                                   `(reduce-stack (cddr s) (sub1 n) (cons (cadr s) v)))
                              (values s v))))
                       (fix-error
-                       (lambda (stack ip get-token)
+                       (lambda (stack tok ip get-token)
                          (letrec ((remove-input
 				   (lambda ()
-				     (let ((a (find-action stack ip)))
+				     (let ((a (find-action stack tok ip)))
 				       (cond
 					((shift? a)
 					 ;; (printf "shift:~a~n" (shift-state a))
-					 (cons (shift-state a)
-					       (cons (if (token? ip)
-							 (token-value ip)
-							 #f)
-						     stack)))
+                                         ,(if src-pos
+                                              ``(,(shift-state a)
+                                                 ,(if (token? ip) (token-value ip) #f)
+                                                 ,(cadr ip)
+                                                 ,(caddr ip)
+                                                 ,@stack)
+                                              ``(,(shift-state a)
+                                                 ,(if (token? ip) (token-value ip) #f)
+                                                 ,@stack)))
 					(else
-					 (printf "discard-input:~a~n" (if (token? ip)
-									  (token-name ip)
-									  ip))
+					 (printf "discard input:~a~n" tok)
 					 (set! ip (get-token))
+                                         (set! tok (input->token ip))
 					 (remove-input))))))
 				  (remove-states
 				   (lambda ()
-				     (let ((a (find-action stack 'error)))
+				     (let ((a (find-action stack 'error #f)))
 				       (cond
 					((shift? a)
 					 ;; (printf "shift:~a~n" (shift-state a))
-					 (set! stack (cons (shift-state a) (cons #f stack)))
-					 (remove-input))				      
+					 (set! stack 
+                                               ,(if src-pos
+                                                    ``(,(shift-state a) ,#f ,(cadr ip) ,(caddr ip) ,@stack)
+                                                    ``(,(shift-state a) ,#f ,@stack)))
+					 (remove-input))
 					(else
-					 ;; (printf "discard-state:~a~n" (car stack))
+					 ;; (printf "discard state:~a~n" (car stack))
 					 (cond
-					  ((< (length stack) 3)
-					   (printf "Unable to shift error token~n")
-					   #f)					
-					  (else
-					   (set! stack (cddr stack))
-					   (remove-states)))))))))
+                                           ((< (length stack) ,(if src-pos `5 `3))
+                                            (printf "Unable to shift error token~n")
+                                            #f)					
+                                           (else
+                                            ,(if src-pos
+                                                 `(set! stack (cddddr stack))
+                                                 `(set! stack (cddr stack)))
+                                            (remove-states)))))))))
 			   (remove-states))))
                       
                       (find-action
-                       (lambda (stack tok ,@(if src-pos `(ip) `()))
+                       (lambda (stack tok ip)
                          (array2d-ref table 
                                       (car stack)
                                       (hash-table-get term-sym->index
@@ -150,26 +180,8 @@
                (lambda (get-token)
                  (let parsing-loop ((stack (list 0))
 				    (ip (get-token)))
-                   (let* ((tok ,(if src-pos `(cond
-                                               ((and (list? ip) (= 3 (length ip)))
-                                                (let ((tok (car ip)))
-                                                  (cond
-                                                    ((symbol? tok) (make-token tok #f))
-                                                    ((token? tok) tok)
-                                                    (else (raise-type-error 'parser 
-                                                                            "(list (token or symbol) position position)"
-                                                                            0 
-                                                                            ip)))))
-                                               (else
-                                                (raise-type-error 'parser 
-                                                                  "(list (token or symbol) position position)"
-                                                                  0
-                                                                  ip)))
-                                                `(cond
-                                                   ((symbol? ip) (make-token ip #f))
-                                                   ((token? ip) ip)
-                                                   (else (raise-type-error 'parser "token or symbol" 0 ip)))))
-                          (action (find-action stack tok ,@(if src-pos `(ip) `()))))
+                   (let* ((tok (input->token ip))
+                          (action (find-action stack tok ip)))
                      (cond
                        ((shift? action)
                         ;; (printf "shift:~a~n" (shift-state action))
@@ -196,7 +208,7 @@
                                                        (cadr ip)
                                                        (cadr args))
                                                   ,(if (null? args)
-                                                       (cadr ip)
+                                                       (caddr ip)
                                                        (list-ref args (- (* (reduce-rhs-length action) 3) 1)))
                                                   ,@new-stack)
                                                ``(,goto 
@@ -213,7 +225,7 @@
                         ,(if src-pos
                              `(err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
                              `(err #t (token-name tok) (token-value tok)))
-                        (let ((new-stack (fix-error stack ip get-token)))
+                        (let ((new-stack (fix-error stack tok ip get-token)))
                           (if new-stack
                               (parsing-loop new-stack (get-token))
                               (raise-read-error 
