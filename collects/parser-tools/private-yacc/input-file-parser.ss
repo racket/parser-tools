@@ -265,23 +265,32 @@
                 (syntax-case prod-so ()
                   ((prod-rhs-sym ...)
                    (andmap identifier? (syntax->list prod-so))
-                   (list->vector
-                    (map (lambda (s)
-                           (hash-table-get 
-                            term-table 
-                            (syntax-object->datum s)
-                            (lambda ()
-                              (hash-table-get 
-                               non-term-table
-                               (syntax-object->datum s)
-                               (lambda ()
-                                 (raise-syntax-error
-                                  'parser-production-rhs
-                                  (format 
-                                   "~a is not declared as a terminal or non-terminal"
-                                   (syntax-object->datum s))
-                                  s))))))
-                         (syntax->list prod-so))))
+                   (begin
+                     (for-each (lambda (t)
+                                 (if (memq (syntax-object->datum t) end-terms)
+                                     (raise-syntax-error
+                                      'parser-production-rhs
+                                      (format "~a is an end token and cannot be used in a production"
+                                              (syntax-object->datum t))
+                                      t)))
+                               (syntax->list prod-so))
+                     (list->vector
+                      (map (lambda (s)
+                             (hash-table-get 
+                              term-table 
+                              (syntax-object->datum s)
+                              (lambda ()
+                                (hash-table-get 
+                                 non-term-table
+                                 (syntax-object->datum s)
+                                 (lambda ()
+                                   (raise-syntax-error
+                                    'parser-production-rhs
+                                    (format 
+                                     "~a is not declared as a terminal or non-terminal"
+                                     (syntax-object->datum s))
+                                    s))))))
+                           (syntax->list prod-so)))))
                   (_
                    (raise-syntax-error
                     'parser-production-rhs
