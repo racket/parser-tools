@@ -239,7 +239,7 @@
                                    (array2d-set! v i1 i2 (cons a old))))
                   (else (if (not (equal? a old))
                             (array2d-set! v i1 i2 (list a old))))))))
-           (get-lookahead (time (compute-LA a g))))
+           (get-lookahead (compute-LA a g)))
      
       (send a for-each-state
             (lambda (state)

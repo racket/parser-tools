@@ -41,14 +41,13 @@
   (define (compute-read a g)
     (let* ((dr (compute-DR a g))
 	   (reads (compute-reads a g)))
-      (time
        (digraph-tk->terml (send a get-mapped-non-term-keys)
                           reads
                           dr
                           (send a get-num-states)
                           (send g get-num-terms)
                           (send g get-num-non-terms))))
-  )
+  
 ;  ;; run-lr0-backward: lr0-automaton * gram-sym list * kernel * int -> kernel list
 ;  ;; returns the list of all k such that state k transitions to state start on the
 ;  ;; transitions in rhs (in order)
