@@ -161,14 +161,6 @@
                          nts)))
                   (syntax->list (syntax (non-term ...))))
                  
-                 (if (not (memq start-sym
-                                (syntax-object->datum (syntax (non-term ...)))))
-                     (raise-syntax-error
-                      'parser-start
-                      (format "Start symbol ~a not defined as a non-terminal"
-                              start-sym)
-                      start))
-                 
                  (let ((dup (duplicate-list? (syntax-object->datum 
                                               (syntax (non-term ...))))))
                    (if dup
@@ -342,20 +334,21 @@
                 (syntax-case prods-so ()
                   ((nt productions ...)
                    (> (length (syntax->list (syntax (productions ...)))) 0)
-                   (let* ((prods (syntax-e prods-so))
-                          (nt (hash-table-get non-term-table 
-                                              (syntax-e (car prods)))))
+                   (let ((nt (hash-table-get 
+			      non-term-table 
+			      (syntax-object->datum (syntax nt)))))
                      (map (lambda (p) (parse-prod+action nt p)) 
-                          (cdr prods))))
-                  (_
+                          (syntax->list (syntax (productions ...))))))
+		  (_
                    (raise-syntax-error
                     'parser-productions
                     "A production for a non-terminal must be (non-term right-hand-side ...) with at least 1 right hand side"
                     prods-so))))))
 	
-        (set! counter 0)
+        (set! counter 1)
         (let* ((start (make-non-term (gensym) 0))
                (end-non-term (make-non-term (gensym) 1))
+               (parsed-prods (map parse-prods-for-nt (cdr (syntax->list prods))))
                (prods 
                 `((,(make-prod start (vector end-non-term) 0 #f #f))
                   ,(map
@@ -365,29 +358,36 @@
                                  (vector
                                   (hash-table-get non-term-table start-sym)
                                   (hash-table-get term-table end))
-                                 counter
+                                 1
                                  #f
                                  (datum->syntax-object
                                   runtime
                                   `(lambda (x) x))))
                     end-terms)
-                  ,@(map parse-prods-for-nt (cdr (syntax->list prods)))))
+                  ,@parsed-prods))
                (nulls (nullable (apply append prods) 
                                 (+ 2 (length non-terms)))))
           
           
-;          (printf "nullable: {~a}~n~n"
-;                  (apply string-append
-;                         (let loop ((i 0))
-;                           (cond
-;                             ((>= i (vector-length nulls)) null)
-;                             ((vector-ref nulls i)
-;                              (cons
-;                               (format "~a" 
-;                                       (gram-sym-symbol
-;                                        (list-ref (cons start non-terms) i)))
-;                               (loop (add1 i))))
-;                             (else (loop (add1 i)))))))
+	  (if (not (memq start-sym list-of-non-terms))
+	      (raise-syntax-error
+	       'parser-start
+	       (format "Start symbol ~a not defined as a non-terminal"
+		       start-sym)
+	       start))
+                 
+          (printf "nullable: {~a}~n~n"
+                  (apply string-append
+                         (let loop ((i 0))
+                           (cond
+                             ((>= i (vector-length nulls)) null)
+                             ((vector-ref nulls i)
+                              (cons
+                               (format "~a " 
+                                       (gram-sym-symbol
+                                        (list-ref (cons start (cons end-non-term non-terms)) i)))
+                               (loop (add1 i))))
+                             (else (loop (add1 i)))))))
           (make-grammar
            (list->vector prods)
            (apply append prods)

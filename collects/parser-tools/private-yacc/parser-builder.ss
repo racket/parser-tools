@@ -75,10 +75,10 @@
                            (let ((a (find-action stack 'error)))
                              (cond
                                ((shift? a)
-				;; (printf "shift:~a~n" (shift-state a))
+				(printf "shift:~a~n" (shift-state a))
                                 (set! stack (cons (shift-state a) (cons #f stack))))
                                (else
-                                ;; (printf "discard-state:~a~n" (car stack))
+                                (printf "discard-state:~a~n" (car stack))
                                 (cond
                                   ((< (length stack) 3)
                                    (printf "Unable to shift error token~n")
@@ -90,7 +90,7 @@
                            (let ((a (find-action stack ip)))
                              (cond
                                ((shift? a)
-                                ;; (printf "shift:~a~n" (shift-state a))
+                                (printf "shift:~a~n" (shift-state a))
                                 (cons (shift-state a)
                                       (cons (if (token? ip)
                                                 (token-value ip)
@@ -122,14 +122,14 @@
                    (let ((action (find-action stack ip)))
                      (cond
                        ((shift? action)
-                        ;; (printf "shift:~a~n" (shift-state action))
+                        (printf "shift:~a~n" (shift-state action))
                         (let ((val (if (token? ip)
                                        (token-value ip)
                                        #f)))
                           (loop (cons (shift-state action) (cons val stack))
                                 (get-token))))
                        ((reduce? action)
-                        ;; (printf "reduce:~a~n" (reduce-prod-num action))
+                        (printf "reduce:~a~n" (reduce-prod-num action))
                         (let-values (((new-stack args)
                                       (reduce-stack stack 
                                                     (reduce-rhs-length action)
@@ -144,7 +144,7 @@
                                               new-stack))
                                   ip))))
                        ((accept? action)
-                        ;; (printf "accept~n")
+                        (printf "accept~n")
                         (cadr stack))
                        (else 
                         (err)
