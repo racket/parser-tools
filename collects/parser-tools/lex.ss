@@ -214,10 +214,11 @@
                                        (vector-ref actions start-state))
                                       ;; how many characters have been read
                                       ;; including the one just read
-                                      (length 1)
+                                      (length-bytes (char-utf-8-length first-char))
+                                      (length-chars 1)
                                       ;; how many characters are in the longest match
                                       (longest-match-length 1))
-                       ;; (printf "(peek-char-or-special port ~e) = ~e~n" (sub1 length) char)
+                       ;; (printf "(peek-char-or-special port ~e) = ~e~n" (sub1 length-bytes) char)
                        (let ((next-state 
                               (cond
                                 ((eof-object? char) #f)
@@ -227,25 +228,26 @@
                          (cond
                            ((not next-state)
                             (check-match ip first-pos longest-match-length
-                                         length longest-match-action wrap?))
+                                         length-chars longest-match-action wrap?))
                            ((vector-ref no-lookahead next-state)
                             (let ((act (vector-ref actions next-state)))
                               (check-match ip 
                                            first-pos 
-                                           (if act length longest-match-length)
-                                           length
+                                           (if act length-chars longest-match-length)
+                                           length-chars
                                            (if act act longest-match-action)
                                            wrap?)))
                            (else
                             (let ((act (vector-ref actions next-state)))
                               (lexer-loop next-state 
-                                          (peek-char-or-special ip length)
+                                          (peek-char-or-special ip length-bytes)
                                           (if act
                                               act
                                               longest-match-action)
-                                          (add1 length)
+                                          (+ (char-utf-8-length char) length-bytes)
+                                          (add1 length-chars)
                                           (if act
-                                              length
+                                              length-chars
                                               longest-match-length)))))))))))))
       lexer))
       
