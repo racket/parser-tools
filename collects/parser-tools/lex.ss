@@ -11,27 +11,35 @@
 	   make-lex-buf
 	   get-position position-offset position-line position-col position?
            define-tokens define-empty-tokens)
-
-
+  
+  
   (define-syntax lexer
     (let ((code
 	   `(letrec ((match
-		      (lambda (lb first-pos end-pos longest-match-length longest-match-action length)
-			(let ((match 
-			       (push-back lb (- length longest-match-length))))
-			  (if (not longest-match-action)
-			      (error 'lexer (format "No match found in input starting with: ~a" 
-                                                    (list->string (lex-buffer-from lb)))))
-			  (longest-match-action
-			   (lambda ()
-			     first-pos)
-			   (lambda ()
-			     end-pos)
-			   (lambda ()
-			     (if (char? (car match))
-				 (list->string (reverse match))
-				 (list->string (reverse (cdr match)))))				 
-			   lb)))))
+                      (lambda (lb first-pos end-pos longest-match-length longest-match-action length)
+                        (let ((match
+                               (push-back lb (- length longest-match-length))))
+                          (if (not longest-match-action)
+                              (raise (make-exn:read 
+                                      (format "lexer: No match found in input starting with: ~a"
+                                              (list->string (lex-buffer-from lb)))
+                                      (current-continuation-marks)
+                                      (lex-buffer-ip lb)
+                                      #f
+                                      (position-line first-pos)
+                                      (position-col first-pos)
+                                      (position-offset first-pos)
+                                      (- (position-offset end-pos) (position-offset first-pos)))))
+                          (longest-match-action
+                           (lambda ()
+                             first-pos)
+                           (lambda ()
+                             end-pos)
+                           (lambda ()
+                             (if (char? (car match))
+                                 (list->string (reverse match))
+                                 (list->string (reverse (cdr match)))))
+                           lb)))))
 	      (lambda (lb)
 		(unless (lex-buffer? lb)
                   (raise-type-error 
@@ -142,7 +150,7 @@
   ;; c = char | eof
   ;; lex-buf = 
   ;;   (make-lex-buffer input-port (c list) (c list) int int int (int list))
-  (define-struct lex-buffer (ip from to offset line col line-lengths))
+  (define-struct lex-buffer (ip from to offset line col line-lengths tab-skips))
 
   ;; make-lex-buf: input-port -> lex-buf
   (define make-lex-buf
@@ -152,7 +160,7 @@
        ((not (input-port? ip))
 	(raise-type-error 'make-lex-buf "input-port" 0 ip))
        (else
-	(make-lex-buffer ip null null 1 1 1 null))))
+	(make-lex-buffer ip null null 1 1 1 null null))))
      ((ip offsets)
       (cond
        ((not (input-port? ip))
@@ -163,13 +171,13 @@
 	    (not (andmap (lambda (x) (>= x 0)) offsets)))
 	(raise-type-error 'make-lex-buf "list of 3 non-negative exact integers" 1 ip offsets))
        (else
-	(make-lex-buffer ip null null (add1 (caddr offsets)) (add1 (car offsets)) (add1 (cadr offsets)) null))))))
+	(make-lex-buffer ip null null (add1 (caddr offsets)) (add1 (car offsets)) (add1 (cadr offsets)) null null))))))
 
   ;; next-char: lex-buf -> c
   ;; gets the next character from the buffer
   (define (next-char lb)
     (let ((get-next
-	   (lambda ()
+           (lambda ()
 	     (cond
 	      ((null? (lex-buffer-from lb)) 
 	       (read-char (lex-buffer-ip lb)))
@@ -190,7 +198,8 @@
 	(set-lex-buffer-to! lb (cons char-in (lex-buffer-to lb)))
 	(cond 
 	 ((eq? #\tab char-in)
-	  (let ((skip-amt 1));(- 8 (modulo (lex-buffer-col lb) 8))))
+	  (let ((skip-amt (- 8 (modulo (lex-buffer-col lb) 8))))
+            (set-lex-buffer-tab-skips! lb (cons skip-amt (lex-buffer-tab-skips lb)))
 	    (set-lex-buffer-col! lb (+ skip-amt (lex-buffer-col lb)))
 	    (set-lex-buffer-offset! lb (+ skip-amt (lex-buffer-col lb)))))
 	 ((eq? #\newline char-in)
@@ -225,31 +234,30 @@
 		 (else
 		  (cond
 		   ((eq? #\newline (car from))
-		    (set-lex-buffer-line! 
-		     lb
-		     (sub1 (lex-buffer-line lb)))
-		    (set-lex-buffer-col!
-		     lb
-		     (car (lex-buffer-line-lengths lb)))
-		    (set-lex-buffer-line-lengths!
-		     lb
-		     (cdr (lex-buffer-line-lengths lb))))
-		   (else
-		    (set-lex-buffer-col! 
-		     lb 
-		     (sub1 (lex-buffer-col lb)))))
-		  (switch-buffers (cdr from) 
-				  (cons (car from) to) 
-				  (sub1 num-to-add)))))))
+		    (set-lex-buffer-line! lb (sub1 (lex-buffer-line lb)))
+		    (set-lex-buffer-col! lb (car (lex-buffer-line-lengths lb)))
+		    (set-lex-buffer-line-lengths! lb (cdr (lex-buffer-line-lengths lb))))
+                   ((eq? #\tab (car from))
+                    (set-lex-buffer-col! lb (- (lex-buffer-col lb) 
+                                               (car (lex-buffer-tab-skips lb))))
+                    (set-lex-buffer-offset! lb (- (add1 (lex-buffer-offset lb))
+                                                  (car (lex-buffer-tab-skips lb))))
+                    (set-lex-buffer-tab-skips! lb (cdr (lex-buffer-tab-skips lb))))
+                   (else
+                    (set-lex-buffer-col! lb (sub1 (lex-buffer-col lb)))))
+                  (switch-buffers (cdr from) 
+                                  (cons (car from) to) 
+                                  (sub1 num-to-add)))))))
       (let-values (((ret new-from)
 		    (switch-buffers (lex-buffer-to lb)
 				    (lex-buffer-from lb)
 				    i)))
-		  (set-lex-buffer-from! lb new-from)
-		  (set-lex-buffer-to! lb null)
-		  (set-lex-buffer-offset! lb (- (lex-buffer-offset lb) i))
-		  (set-lex-buffer-line-lengths! lb null)
-		  ret)))
+        (set-lex-buffer-from! lb new-from)
+        (set-lex-buffer-to! lb null)
+        (set-lex-buffer-offset! lb (- (lex-buffer-offset lb) i))
+        (set-lex-buffer-line-lengths! lb null)
+        (set-lex-buffer-tab-skips! lb null)
+        ret)))
 
   (define-struct position (offset line col))
   (define (get-position lb)
