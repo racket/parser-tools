@@ -65,7 +65,7 @@
                            (spec-act 
                             (get-special-action spec/re-act-lst 'special #'(void)))
                            (spec-error-act
-                            (get-special-action spec/re-act-lst 'special-error #'#f))
+                            (get-special-action spec/re-act-lst 'special-error #'(raise exception)))
                            (spec-comment-act 
                             (get-special-action spec/re-act-lst 'special-comment #'#f))
                            (re-act-lst
@@ -79,10 +79,9 @@
                                       (actions-stx `(vector ,@(vector->list (table-actions table))))
                                       (spec-act-stx
                                        (wrap-action spec-act 'special #'here spec-act))
-                                      (has-error-act?-stx (if spec-error-act #t #f))
                                       (spec-error-act-stx
                                        (wrap-action spec-error-act 'exception #'here spec-error-act))
-                                      (has-comment-act?-stx (if spec-comment-act #t #f))
+                                      (has-comment-act?-stx (if (syntax-e spec-comment-act) #t #f))
                                       (spec-comment-act-stx
                                        (wrap-action spec-comment-act (gensym) #'here spec-comment-act))
                                       (wrap? wrap?))
@@ -93,7 +92,6 @@
                                        actions-stx
                                        no-lookahead-stx
                                        spec-act-stx
-                                       has-error-act?-stx
                                        spec-error-act-stx
                                        has-comment-act?-stx
                                        spec-comment-act-stx
@@ -153,7 +151,7 @@
                        (vector-ref actions longest-match-action) wrap?)))))
   
   (define (lexer-body start-state trans-table eof-table actions no-lookahead
-                      special-action has-special-error-action? special-error-action
+                      special-action special-error-action
                       has-special-comment-action? special-comment-action wrap?)
     (letrec ((lexer
               (lambda (ip)
@@ -172,13 +170,11 @@
                             (spec (with-handlers ((exn:special-comment?
                                                    (lambda (x) (set! comment? #t)))
                                                   (not-break-exn?
-                                                   (lambda (ex) (set! error? ex))))
+                                                   (lambda (ex) (set! error? #t) ex)))
                                     (read-char-or-special ip))))
                        (cond
                          ((and comment? (not has-special-comment-action?))
                           (lexer ip))
-                         ((and error? (not has-special-error-action?))
-                          (raise error?))
                          (else
                           (do-match ip first-pos (cond
                                                    (comment? special-comment-action)
