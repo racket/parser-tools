@@ -207,18 +207,23 @@
   ;; buile-table: grammar * string -> action2d-array
   (define (build-table g file)
     (let* ((a (build-lr0-automaton g))
+	   (get-state (lr0-states a))
 	   (terms (grammar-terms g))
 	   (non-terms (grammar-non-terms g))
-	   (get-state (lr0-states a))
 	   (get-term (list->vector terms))
 	   (get-non-term (list->vector non-terms))
 	   (get-prod (list->vector (grammar-prods g)))
 	   (num-states (vector-length get-state))
 	   (num-terms (vector-length get-term))
 	   (num-non-terms (vector-length get-non-term))
+           (end-term-indexes 
+            (map
+             (lambda (term)
+               (+ num-non-terms (gram-sym-index term)))
+             (grammar-end-terms g)))
 	   (num-gram-syms (+ num-terms num-non-terms))
 	   (table (make-array2d num-states num-gram-syms #f))
-	   (array2d-add! 
+	   (array2d-add!
 	    (lambda (v i1 i2 a)
 	      (let ((old (array2d-ref v i1 i2)))
 		(cond
@@ -246,10 +251,14 @@
 			    (array2d-set! table 
 					  state 
 					  i
-					  (if (< i num-non-terms)
-					      (kernel-index goto)
-					      (make-shift 
-					       (kernel-index goto))))))
+					  (cond
+                                            ((< i num-non-terms)
+                                             (kernel-index goto))
+                                            ((member i end-term-indexes)
+                                             (make-accept))
+                                            (else
+                                             (make-shift 
+                                              (kernel-index goto)))))))
 		      (loop (add1 i)))))
 	      (let ((items
 		     (filter (lambda (item)

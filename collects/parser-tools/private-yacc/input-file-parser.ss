@@ -395,4 +395,6 @@
            (cons start (cons end-non-term non-terms))
            terms
            (add1 counter)
-           end-terms))))))
+           (map (lambda (term-name)
+                  (hash-table-get term-table term-name))
+                end-terms)))))))
