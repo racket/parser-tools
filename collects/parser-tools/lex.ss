@@ -65,9 +65,9 @@
                            (spec-act 
                             (get-special-action spec/re-act-lst 'special #'(void)))
                            (spec-error-act
-                            (get-special-action spec/re-act-lst 'special-error #f))
+                            (get-special-action spec/re-act-lst 'special-error #'#f))
                            (spec-comment-act 
-                            (get-special-action spec/re-act-lst 'special-comment #f))
+                            (get-special-action spec/re-act-lst 'special-comment #'#f))
                            (re-act-lst
                             (filter-out-specials spec/re-act-lst
                                                  '(special special-comment special-error))))
@@ -81,10 +81,10 @@
                                        (wrap-action spec-act 'special #'here spec-act))
                                       (has-error-act?-stx (if spec-error-act #t #f))
                                       (spec-error-act-stx
-                                       (wrap-action spec-act 'exception #'here spec-error-act))
+                                       (wrap-action spec-error-act 'exception #'here spec-error-act))
                                       (has-comment-act?-stx (if spec-comment-act #t #f))
                                       (spec-comment-act-stx
-                                       (wrap-action spec-act (gensym) #'here spec-comment-act))
+                                       (wrap-action spec-comment-act (gensym) #'here spec-comment-act))
                                       (wrap? wrap?))
                           (syntax 
                            (lexer-body start-state-stx 
