@@ -60,14 +60,13 @@
 						"expects regular expression / action pairs"
 						x))))
 		     (syntax->list (syntax (re-act ...))))
-                    (let* ((error-continue-arg (gensym))
-                           (spec/re-act-lst
+                    (let* ((spec/re-act-lst
                             (syntax->list (syntax (re-act ...))))
                            (spec-act 
                             (get-special-action spec/re-act-lst 'special #'(void)))
                            (spec-comment-act 
                             (get-special-action spec/re-act-lst 'special-comment 
-                                                #`(#,error-continue-arg input-port)))
+                                                #f))
                            (re-act-lst
                             (filter-out-specials spec/re-act-lst
                                                  '(special special-comment special-error))))
@@ -83,13 +82,17 @@
                                         `(lambda (start-pos end-pos special return-without-pos input-port)
                                            ,spec-act)
                                         spec-act))
+                                      (has-spec-comment-act-stx
+                                       (if spec-comment-act #t #f))
                                       (spec-comment-act-stx
-                                       (datum->syntax-object
-                                        spec-comment-act
-                                        `(lambda (start-pos end-pos ,error-continue-arg
-                                                  return-without-pos input-port)
-                                           ,spec-comment-act)
-                                        spec-comment-act))
+                                       (if spec-comment-act
+					   (datum->syntax-object
+					    spec-comment-act
+					    `(lambda (start-pos end-pos ,(gensym)
+								return-without-pos input-port)
+					       ,spec-comment-act)
+					    spec-comment-act)
+					   #'void))
                                       (wrap? wrap?))
                           (syntax 
                            (lexer-body start-state-stx 
@@ -98,6 +101,7 @@
                                        actions-stx
                                        no-lookahead-stx
                                        spec-act-stx
+                                       has-spec-comment-act-stx
                                        spec-comment-act-stx
                                        wrap?))))))))))))
       (values
@@ -155,7 +159,7 @@
                        (vector-ref actions longest-match-action) wrap?)))))
   
   (define (lexer-body start-state trans-table eof-table actions no-lookahead
-                      special-action special-comment-action wrap?)
+                      special-action has-spec-cmt-act? special-comment-action wrap?)
     (letrec ((lexer
               (lambda (ip)
                 (unless (input-port? ip)
@@ -170,12 +174,16 @@
                     ((eq? 'special first-char)
                      (let* ((comment? #f)
                             (spec (with-handlers ((exn:special-comment?
-                                                   (lambda (x) (set! comment? #t) lexer)))
+                                                   (lambda (x) (set! comment? #t))))
                                     (read-char-or-special ip))))
-                       (do-match ip first-pos (if comment?
-                                                  special-comment-action
-                                                  special-action)
-                                 spec wrap?)))
+                       (cond
+                         ((and comment? (not has-spec-cmt-act?))
+                          (lexer ip))
+                         (else
+                          (do-match ip first-pos (if comment?
+                                                     special-comment-action
+                                                     special-action)
+                                    spec wrap?)))))
                     (else
                      (let lexer-loop (
                                       ;; current-state
