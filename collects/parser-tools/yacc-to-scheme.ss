@@ -61,7 +61,7 @@
        ((rhs) (list `(,$1 #f)))
        ((rhs prec) (list `(,$1 ,$2 #f)))
        ((rhs PIPE prods) (cons `(,$1 #f) $3))
-       ((rhs prec PIPE prods) (cons `(,$1 ,$2 #f) $3)))
+       ((rhs prec PIPE prods) (cons `(,$1 ,$2 #f) $4)))
       (prec
        ((%prec SYM)
         (begin

@@ -15,20 +15,33 @@
   (define stx-for-original-property (read-syntax #f (open-input-string "original")))
 
   ;; get-args: int * syntax-object list * syntax-object -> syntax-object list
-  (define (get-args i rhs act src-pos)
-    (cond
-      ((null? rhs) null)
-      (else
-       (let ((b (syntax-local-introduce (car rhs))))
-         (cond
-           (src-pos
-            `(,(datum->syntax-object act (string->symbol (format "$~a" i)) b stx-for-original-property)
-              ,(datum->syntax-object act (string->symbol (format "$~a-start-pos" i)) b stx-for-original-property)
-              ,(datum->syntax-object act (string->symbol (format "$~a-end-pos" i)) b stx-for-original-property)
-              ,@(get-args (add1 i) (cdr rhs) act src-pos)))
-           (else
-            `(,(datum->syntax-object act (string->symbol (format "$~a" i)) b stx-for-original-property)
-              ,@(get-args (add1 i) (cdr rhs) act src-pos))))))))
+  (define (get-args i rhs act src-pos term-defs)
+    (let ((empty-table (make-hash-table)))
+      (for-each (lambda (td)
+                  (let ((v (syntax-local-value td)))
+                    (if (e-terminals-def? v)
+                        (for-each (lambda (s)
+                                    (hash-table-put! empty-table (syntax-object->datum s) #t))
+                                  (syntax->list (e-terminals-def-t v))))))
+                (cdr (syntax->list term-defs)))
+      (let get-args ((i i) 
+                     (rhs rhs))
+        (cond
+          ((null? rhs) null)
+          (else
+           (let ((b (syntax-local-introduce (car rhs)))
+                 (name (if (hash-table-get empty-table (syntax-object->datum (car rhs)) (lambda () #f))
+                           (gensym)
+                           (string->symbol (format "$~a" i)))))
+             (cond
+               (src-pos
+                `(,(datum->syntax-object act name b stx-for-original-property)
+                  ,(datum->syntax-object act (string->symbol (format "$~a-start-pos" i)) b stx-for-original-property)
+                  ,(datum->syntax-object act (string->symbol (format "$~a-end-pos" i)) b stx-for-original-property)
+                  ,@(get-args (add1 i) (cdr rhs))))
+               (else
+                `(,(datum->syntax-object act name b stx-for-original-property)
+                  ,@(get-args (add1 i) (cdr rhs)))))))))))
     
   ;; nullable: production list * int -> non-term set
   ;; determines which non-terminals can derive epsilon
@@ -311,7 +324,7 @@
               (lambda (rhs act)
                 (datum->syntax-object
                  runtime
-                 `(lambda ,(get-args 1 (syntax->list rhs) act src-pos)
+                 `(lambda ,(get-args 1 (syntax->list rhs) act src-pos term-defs)
                     ,act)
                  act)))
              
