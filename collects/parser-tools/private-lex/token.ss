@@ -5,7 +5,7 @@
   
   (require-for-syntax "token-syntax.ss")
 
-  (provide define-tokens define-empty-tokens token-name token-value token?)
+  (provide define-tokens define-empty-tokens make-token token-name token-value token?)
 
   (define-struct token (name value) (make-inspector))
 

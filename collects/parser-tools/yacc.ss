@@ -5,7 +5,8 @@
                       "private-yacc/yacc-helper.ss")
   (require "private-yacc/parser-actions.ss"
            "private-yacc/array2d.ss"
-           "private-lex/token.ss")
+           "private-lex/token.ss"
+	   (lib "readerr.ss" "syntax"))
   
   (provide parser)
   
