@@ -107,7 +107,7 @@
       (if (> RR-conflicts 0)
 	  (fprintf port "~a reduce/reduce conflicts~n" RR-conflicts))))
 
-  (define (resolve-conflicts a table num-terms num-non-terms)
+  (define (resolve-conflicts a table num-terms num-non-terms suppress)
     (letrec ((SR-conflicts 0)
 	     (RR-conflicts 0)
 	     (get-action
@@ -140,15 +140,16 @@
                                              (+ num-non-terms term))))
                  (loop (add1 term))))))
        a)
-
-      (if (> SR-conflicts 0)
-	  (fprintf (current-error-port) 
-		   "~a shift/reduce conflicts~n" 
-		   SR-conflicts))
-      (if (> RR-conflicts 0)
-	  (fprintf (current-error-port)
-		   "~a reduce/reduce conflicts~n"
-		   RR-conflicts))))
+      (if (not suppress)
+          (begin
+            (if (> SR-conflicts 0)
+                (fprintf (current-error-port) 
+                         "~a shift/reduce conflicts~n" 
+                         SR-conflicts))
+            (if (> RR-conflicts 0)
+                (fprintf (current-error-port)
+                         "~a reduce/reduce conflicts~n"
+                         RR-conflicts))))))
     
 
 
@@ -202,7 +203,7 @@
   ;; In the result table the first index is the state and the second is the 
   ;; term/non-term index (with the non-terms coming first)
   ;; buile-table: grammar * string -> action2d-array
-  (define (build-table g file)
+  (define (build-table g file suppress)
     (let* ((a (build-lr0-automaton g))
 	   (terms (grammar-terms g))
 	   (non-terms (grammar-non-terms g))
@@ -287,7 +288,7 @@
 	      (lambda (port)
 		(display-parser a table get-term get-non-term (grammar-prods g)
                                 port)))))
-      (resolve-conflicts a table num-terms num-non-terms)
+      (resolve-conflicts a table num-terms num-non-terms suppress)
       table))
 )
 

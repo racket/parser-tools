@@ -20,10 +20,11 @@
                (start #f)
                (end #f)
                (precs #f)
+               (suppress #f)
                (grammar #f))
            (for-each
             (lambda (arg)
-              (syntax-case* arg (debug error tokens start end precs grammar)
+              (syntax-case* arg (debug error tokens start end precs grammar suppress)
                 (lambda (a b)
                   (eq? (syntax-object->datum a) (syntax-object->datum b)))
                 ((debug filename)
@@ -37,6 +38,8 @@
                     (raise-syntax-error #f "Multiple debug declarations" stx))
                    (else
                     (set! debug (syntax-object->datum (syntax filename))))))
+                ((suppress)
+                 (set! suppress #t))
                 ((error expression)
                  (if error
                      (raise-syntax-error #f "Multiple error declarations" stx)
@@ -102,6 +105,7 @@
 	   (if (not start)
                (raise-syntax-error #f "missing start declaration" stx))
            (build-parser (if debug debug "")
+                         suppress
                          error
                          tokens
                          start

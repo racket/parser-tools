@@ -7,13 +7,13 @@
   (require-for-syntax "private-lex/structs.ss")
   (require (lib "list.ss")
            "private-lex/token.ss")
-  (provide lex define-lex-abbrev define-lex-abbrevs
+  (provide lexer define-lex-abbrev define-lex-abbrevs
 	   make-lex-buf
 	   get-position position-offset position-line position-col position?
            define-tokens define-empty-tokens)
 
 
-  (define-syntax lex
+  (define-syntax lexer
     (let ((code
 	   `(letrec ((match
 		      (lambda (lb first-pos end-pos longest-match-length longest-match-action length)

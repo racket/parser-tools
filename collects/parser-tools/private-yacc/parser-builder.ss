@@ -8,9 +8,9 @@
   
   (provide build-parser)
   
-  (define (build-parser filename error-expr input-terms start end assocs prods runtime src)
+  (define (build-parser filename suppress error-expr input-terms start end assocs prods runtime src)
     (let* ((grammar (parse-input start end input-terms assocs prods runtime))
-           (table (build-table grammar filename))
+           (table (build-table grammar filename suppress))
            (table-code 
             `((lambda (table-list)
                 (let ((v (list->vector table-list)))
@@ -151,7 +151,7 @@
                         ;; (printf "accept~n")
                         (cadr stack))
                        (else 
-                        (err)
+                        (err ip)
                         (let ((new-stack (fix-error stack ip get-token)))
                           (if new-stack
                               (parsing-loop new-stack (get-token))
