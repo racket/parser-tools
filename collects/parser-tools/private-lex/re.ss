@@ -11,8 +11,6 @@
            orR-res andR-res negR-re
            re-nullable? re-index)
   
-  (define max-char-num #x10FFFF)
-  
   ;; get-index : -> nat
   (define get-index (make-counter))
 

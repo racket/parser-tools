@@ -96,8 +96,23 @@
 				       name-lst)))
              (let-values (((trans start action-names no-look disappeared-uses)
                            (build-lexer re-actname-lst)))
-               (when (vector-ref action-names start)
-                 (printf "Warning: lexer might accept the empty string ~a.~n" stx))
+               (when (vector-ref action-names start) ;; Start state is final
+                 (unless (and 
+                          ;; All the successor states are final
+                          (andmap (lambda (x) (vector-ref action-names (vector-ref x 2)))
+                                      (vector->list (vector-ref trans start)))
+                          ;; Each character has a successor state
+                          (let loop ((check 0)
+                                     (nexts (vector->list (vector-ref trans start))))
+                            (cond
+                              ((null? nexts) #f)
+                              (else
+                               (let ((next (car nexts)))
+                                 (and (= (vector-ref next 0) check)
+                                      (let ((next-check (vector-ref next 1)))
+                                        (or (>= next-check max-char-num)
+                                            (loop (add1 next-check) (cdr nexts))))))))))
+                   (printf "Warning: lexer at ~a can accept the empty string.~n" stx)))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
                              (no-lookahead-stx no-look)

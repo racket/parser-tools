@@ -18,7 +18,7 @@
   
   ;; A table is either
   ;; - (vector-of (union #f nat))
-  ;; - (vector-of (vector-of (cons (cons nat nat) nat)))
+  ;; - (vector-of (vector-of (vector nat nat nat)))
   
   (define loc:integer-set-contents is:integer-set-contents)
   

@@ -2,6 +2,8 @@
   (require (lib "list.ss"))
   
   (provide (all-defined))
+
+  (define max-char-num #x10FFFF)
   
   (define-struct lex-abbrev (abbrev))
   (define-struct lex-trans (f))
