@@ -30,7 +30,7 @@
   (define-struct (zeroR re) () (make-inspector))
   (define-struct (char-setR re) (chars) (make-inspector))
   (define-struct (concatR re) (re1 re2) (make-inspector))
-  (define-struct (repeatR re) (re))
+  (define-struct (repeatR re) (re) (make-inspector))
   (define-struct (orR re) (res) (make-inspector))
   (define-struct (andR re) (res) (make-inspector))
   (define-struct (negR re) (re) (make-inspector))
@@ -103,38 +103,28 @@
       (`(^ ,crs ...)
         (let ((cs (->re `(: ,@crs) cache)))
           (cond
-            ((zeroR? cs) (build-char-set (make-range 0 (sub1 (expt 2 32))) cache))
+            ((zeroR? cs) (build-char-set (make-range 0 255) cache))
             ((char-setR? cs)
-             (build-char-set
-              (let loop ((bad-chars (map char->integer
-                                         (char-setR-chars cs)))
-                         (i 0))
-                (cond
-                  ((> i 255) null)
-                  ((and (not (null? bad-chars))
-                        (= i (car bad-chars)))
-                   (loop (cdr bad-chars) (add1 i)))
-                  (else
-                   (cons (integer->char i) (loop bad-chars (add1 i))))))
-              cache))
+             (build-char-set (complement (char-setR-chars cs) 255) cache))
             (else z))))))
               
 
         
 
   ;; flatten-res: (list-of re) (re -> bool) (re -> (list-of re))
-  ;;              ((list-of char) (list-of char) -> (list-of char)) cache -> (list-of re)
-  ;; Takes all the char-sets in l and combines them into one element using the combine function.
+  ;;              (char-set char-set -> char-set) cache -> (list-of re)
+  ;; Takes all the char-sets in l and combines them into one char-set using the combine function.
   ;; Flattens out the values of type?.  get-res only needs to function on things type? returns
   ;; true for.
   (define (flatten-res l type? get-res combine cache)
     (let loop ((res l)
+               ;; chars : (union #f char-set)
                (chars #f)
                (no-chars null))
       (cond
         ((null? res) 
          (if chars
-             (cons (build-char-set (mergesort chars char<?) cache) no-chars)
+             (cons (build-char-set chars cache) no-chars)
              no-chars))
         ((char-setR? (car res))
          (if chars
@@ -149,14 +139,15 @@
   
   (define (build-zero) z)
     
-  ;; build-char-set : (list-of char) cache -> re
-  ;; cs must be sorted
+  ;; build-char-set : char-set cache -> re
   #;(define (build-char-set cs cache)
       (cond
         ((null? cs) z)
         (else
          (make-char-setR #f (get-index) cs))))
   
+
+  ;; build-char-set : char-set cache -> re
   (define (build-char-set cs cache)
     (cond
       ((null? cs) z)
@@ -182,9 +173,13 @@
   
   ;; build-repeat : re cache -> re
   (define (build-repeat r cache)
-    (cache (cons 'repeat (re-index r))
-           (lambda ()
-             (make-repeatR #t (get-index) r))))
+    (cond
+      ((eq? z r) e)
+      ((repeatR? r) r)
+      (else
+       (cache (cons 'repeat (re-index r))
+              (lambda ()
+                (make-repeatR #t (get-index) r))))))
   
   
   ;; build-or : (list-of re) cache -> re
@@ -225,9 +220,9 @@
   
   ;; Tests for the build-functions
   (test-block ((c (make-cache))
-               (r1 (build-char-set `(#\1) c))
-               (r2 (build-char-set `(#\2) c))
-               (r3 (build-char-set `(#\3) c))
+               (r1 (build-char-set (make-range (char->integer #\1) (char->integer #\1)) c))
+               (r2 (build-char-set (make-range (char->integer #\2) (char->integer #\2)) c))
+               (r3 (build-char-set (make-range (char->integer #\3) (char->integer #\3)) c))
                (rc (build-concat r1 r2 c))
                (rc2 (build-concat r2 r1 c))
                (rr (build-repeat rc c))
@@ -244,9 +239,9 @@
                (rn (build-neg z c))
                (rn2 (build-neg r1 c)))
                
-              ((char-setR-chars r1) `(#\1))
-              ((char-setR-chars r2) `(#\2))
-              ((char-setR-chars r3) `(#\3))
+              ((char-setR-chars r1) (make-range (char->integer #\1) (char->integer #\1)))
+              ((char-setR-chars r2) (make-range (char->integer #\2) (char->integer #\2)))
+              ((char-setR-chars r3) (make-range (char->integer #\3) (char->integer #\3)))
               ((build-char-set null c) z)
               ((build-concat r1 e c) r1)
               ((build-concat e r1 c) r1)
@@ -265,6 +260,8 @@
               ((build-or null c) z)
               ((build-or `(,r1 ,z) c) r1)
               ((build-repeat rc c) rr)
+              ((build-repeat z c) e)
+              ((build-repeat (build-repeat rc c) c) (build-repeat rc c))
               ((repeatR-re rr) rc)
               (ra ra2)
               (ra ra3)
@@ -296,10 +293,12 @@
                (r5 (->re `(: ,r3-5 #\7) c))
                (r6 (->re #\6 c)))
               ((flatten-res null orR? orR-res merge c) null)
-              ((char-setR-chars (car (flatten-res `(,r1) orR? orR-res merge c))) '(#\1))
-              ((char-setR-chars (car (flatten-res `(,r4) orR? orR-res merge c))) '(#\1 #\2))
+              ((char-setR-chars (car (flatten-res `(,r1) orR? orR-res merge c)))
+               (make-range (char->integer #\1) (char->integer #\1)))               
+              ((char-setR-chars (car (flatten-res `(,r4) orR? orR-res merge c)))
+               (make-range (char->integer #\1) (char->integer #\2)))
               ((char-setR-chars (car (flatten-res `(,r6 ,r5 ,r4 ,r3-5 ,r2 ,r1) orR? orR-res merge c)))
-               (string->list "1234567"))
+               (make-range (char->integer #\1) (char->integer #\7)))
               ((flatten-res `(,r1 ,r2) andR? andR-res (lambda (x y)
                                                         (let-values (((i _ __)
                                                                       (split x y)))
@@ -313,7 +312,7 @@
                (rr (->re `(@ ,r ,r) c))
                (rrr (->re `(@ ,r ,rr) c))
                (rrr* (->re `(* ,rrr) c)))
-              ((char-setR-chars r) '(#\a))
+              ((char-setR-chars r) (make-range (char->integer #\a) (char->integer #\a)))
               ((->re "" c) e)
               ((->re "asdf" c) (->re `(@ #\a #\s #\d #\f) c))
               ((->re r c) r)
@@ -324,16 +323,18 @@
               ((->re `(? ,rrr*) c) rrr*)
               ((->re `(: (: (- #\a #\c) (^ (- #\000 #\110) (- #\112 #\377)))
                          (: (* #\2))) c)
-               (build-or (list (build-char-set (list #\111 #\a #\b #\c) c)
-                               (build-repeat (build-char-set '(#\2) c) c))
+               (build-or (list (build-char-set (append (make-range 73 73)
+                                                       (make-range 97 99))
+                                               c)
+                               (build-repeat (build-char-set (make-range 50 50) c) c))
                          c))
               ((->re `(: ,rr ,rrr) c) (build-or (list rr rrr) c))
               ((->re `(: ,r) c) r)
               ((->re `(:) c) z)
               ((->re `(& (& #\111 (^ (- #\000 #\110) (- #\112 #\377)))
                          (& (* #\2))) c)
-               (build-and (list (build-char-set '(#\111) c)
-                                (build-repeat (build-char-set '(#\2) c) c))
+               (build-and (list (build-char-set (make-range 73 73) c)
+                                (build-repeat (build-char-set (make-range 50 50) c) c))
                           c))
               ((->re `(& (& #\000 (^ (- #\000 #\110) (- #\112 #\377)))
                          (& (* #\2))) c)
@@ -347,14 +348,14 @@
               (rr (build-concat r r c))
               ((->re `(@ ,r ,rr ,rrr) c)
                (build-concat r (build-concat rr rrr c) c))
-              ((char-setR-chars (->re `(- #\1 #\1) c)) '(#\1))
-              ((char-setR-chars (->re `(- #\1 #\9) c)) (string->list "123456789"))
-              ((char-setR-chars (->re `(- "1" "1") c)) '(#\1))
-              ((char-setR-chars (->re `(- "1" "9") c)) (string->list "123456789"))
+              ((char-setR-chars (->re `(- #\1 #\1) c)) (make-range 49 49))
+              ((char-setR-chars (->re `(- #\1 #\9) c)) (make-range 49 57))
+              ((char-setR-chars (->re `(- "1" "1") c)) (make-range 49 49))
+              ((char-setR-chars (->re `(- "1" "9") c)) (make-range 49 57))
               ((->re `(- "9" "1") c) z)
               ((char-setR-chars (->re `(^) c))
                (char-setR-chars (->re `(- #\000 #\377) c)))
-              ((char-setR-chars (->re `(^ #\001 (- #\002 #\377)) c)) `(#\000))
+              ((char-setR-chars (->re `(^ #\001 (- #\002 #\377)) c)) (make-range 0 0))
               )
   
   )

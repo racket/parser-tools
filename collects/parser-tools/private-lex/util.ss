@@ -1,7 +1,7 @@
 (module util mzscheme
   (require (lib "list.ss"))
   
-  (provide (all-defined-except split-acc))
+  (provide (all-defined-except split-acc complement-acc))
   
   (define-struct lex-abbrev (abbrev))
   
@@ -307,4 +307,75 @@
                  ((6 . 6) (50 . 60) (201 . 220))
                  ((1 . 1) (9 . 9) (100 . 100) (500 . 600) (600 . 700))))
               )
-  )
+  
+  ;; complement-acc : char-set nat nat -> char-set
+  ;; As complement.  The current-nat accumulator keeps track of where the
+  ;; next range in the complement should start.
+  (define (complement-acc s current-nat max)
+    (cond
+      ((null? s) (if (<= current-nat max)
+                     (list (cons current-nat max))
+                     null))
+      (else
+       (let ((s-car (car s)))
+         (cond
+           ((< current-nat (car s-car))
+            (cons (cons current-nat (sub1 (car s-car)))
+                  (complement-acc (cdr s) (add1 (cdr s-car)) max)))
+           ((<= current-nat (cdr s-car))
+            (complement-acc (cdr s) (add1 (cdr s-car)) max))
+           (else
+            (complement-acc (cdr s) current-nat max)))))))
+  
+    
+  ;; complement : char-set nat -> char-set
+  ;; A set of all the nats not in s, up to and including max.
+  ;; (cdr (last-pair s)) <= max
+  (define (complement s max)
+    (complement-acc s 0 max))
+  (test-block ()
+              ((complement null 255) '((0 . 255)))
+              ((complement '((1 . 5) (7 . 7) (10 . 200)) 255)
+               '((0 . 0) (6 . 6) (8 . 9) (201 . 255)))
+              ((complement '((0 . 254)) 255) '((255 . 255)))
+              ((complement '((1 . 255)) 255) '((0 . 0)))
+              ((complement '((0 . 255)) 255) null))
+  
+  ;; char-in-set? : nat char-set -> bool
+  (define (char-in-set? c cs)
+    (and
+      (pair? cs)
+      (or (<= (caar cs) c (cdar cs))
+          (char-in-set? c (cdr cs)))))
+  (test-block ()
+              ((char-in-set? 1 null) #f)
+              ((char-in-set? 19 '((1 . 18) (20 . 21))) #f)
+              ((char-in-set? 19 '((1 . 2) (19 . 19) (20 . 21))) #t))
+               
+  (define get-a-char car)
+  
+  (define (char-set->string cs)
+    (cond
+      ((null? cs) "")
+      (else
+       (string-append (format "~a(~a)-~a(~a) "
+                              (caar cs) (integer->char (caar cs))
+                              (cdar cs) (integer->char (cdar cs)))
+                      (char-set->string (cdr cs))))))
+  
+  (define (char-for-each-acc f start stop cs)
+    (cond
+      ((and (> start stop) (null? cs)) (void))
+      ((> start stop)
+       (char-for-each-acc f (caar cs) (cdar cs) (cdr cs)))
+      (else
+       (f start)
+       (char-for-each-acc f (add1 start) stop cs))))
+  
+  (define (char-set-for-each f cs)
+    (cond
+      ((null? cs) (void))
+      (else
+       (char-for-each-acc f (caar cs) (cdar cs) (cdr cs)))))
+  
+    )

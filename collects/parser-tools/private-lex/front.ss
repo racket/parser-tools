@@ -39,13 +39,13 @@
          (let ((from-state (car trans)))
            (for-each (lambda (chars/to)
                        (let ((to-state (cdr chars/to)))
-                         (for-each (lambda (char)
-                                     (vector-set! char-table
-                                                  (bitwise-ior 
-                                                   (char->integer char)
-                                                   (arithmetic-shift from-state 8))
-                                                  to-state))
-                                   (car chars/to))))
+                         (char-set-for-each (lambda (char)
+                                              (vector-set! char-table
+                                                           (bitwise-ior 
+                                                            char
+                                                            (arithmetic-shift from-state 8))
+                                                           to-state))
+                                            (car chars/to))))
                      (cdr trans))))
        (dfa-transitions dfa))
       
@@ -66,9 +66,9 @@
                (list (make-vector 256 #f) 1 (vector #f) (make-vector 1 #t)))
               ((call-with-values (lambda ()
                                    (dfa->table (make-dfa 4 1 (list (cons 2 2) (cons 3 3))
-                                                         (list (cons 1 (list (cons (list #\1 #\2) 1)
-                                                                             (cons (list #\3) 2)))
-                                                               (cons 2 (list (cons (list #\1) 3)))))))
+                                                         (list (cons 1 (list (cons (make-range 49 50) 1)
+                                                                             (cons (make-range 51 51) 2)))
+                                                               (cons 2 (list (cons (make-range 49 49) 3)))))))
                                  list)
                (list (let ((v (make-vector 1024 #f)))
                        (vector-set! v 305 1)
