@@ -17,7 +17,7 @@
   
   (define-syntaxes (lexer lexer-src-pos)
     (let ((build-lexer
-           (lambda (wrap)
+           (lambda (wrap?)
              (lambda (stx)
                (syntax-case stx ()
                  ((_)
@@ -33,16 +33,20 @@
                                                 x))))
                      (syntax->list (syntax (re-act ...))))
                     (let ((table (generate-table (syntax (re-act ...)) stx)))
-                      (with-syntax ((start-state `,(table-start table))
-                                    (trans-table `,(table-trans table))
-                                    (eof-table `,(table-eof table))
-                                    (no-lookahead `,(table-no-lookahead table))
+                      (with-syntax ((start-state (table-start table))
+                                    (trans-table (table-trans table))
+                                    (eof-table (table-eof table))
+                                    (no-lookahead (table-no-lookahead table))
                                     (actions `(vector ,@(vector->list (table-actions table)))))
-                        (syntax (lambda (lb)
-                                  (lexer-body lb start-state trans-table eof-table actions no-lookahead wrap))))))))))))
+                        (if wrap?
+                            (syntax (lambda (lb)
+                                      (lexer-body lb start-state trans-table eof-table actions no-lookahead list)))
+                            (syntax (lambda (lb)
+                                      (lexer-body lb start-state trans-table eof-table actions no-lookahead (lambda (a b c) a))))))))))))))
+                            
       (values
-       (build-lexer (lambda (x) x))
-       (build-lexer (lambda (x fp ep) (list x fp ep))))))
+       (build-lexer #f)
+       (build-lexer #t))))
 
   
   (define-syntax (define-lex-abbrev stx)
@@ -135,6 +139,7 @@
                            (if act
                                length
                                longest-match-length)))))))))
+
   (define (do-match lb first-pos longest-match-length longest-match-action wrap)
     (let* ((match (get-match lb longest-match-length))
            (end-pos (get-position lb)))
@@ -153,7 +158,9 @@
           (lambda () end-pos)
           (lambda () match)
           ret
-          lb)))))
+          lb)
+	 first-pos
+	 end-pos))))
   
   
   ;; Lex buffer is NOT thread safe
