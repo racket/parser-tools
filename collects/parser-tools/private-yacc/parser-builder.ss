@@ -10,7 +10,7 @@
   
   (define (build-parser start input-terms assocs prods filename runtime src)
     (let* ((grammar (parse-input start input-terms assocs prods))
-           (table (build-table grammar ""))
+           (table (build-table grammar filename))
            (table-code 
             (cons 'vector 
                   (map (lambda (action)
@@ -41,29 +41,34 @@
            (parser-code
             `(letrec ((term-sym->index ,token-code)
                       (table ,table-code)
-                      (pop-2x
+                      (pop-x
                        (lambda (s n)
                          (if (> n 0)
-                             (pop-2x (cdr (cdr s)) (sub1 n))
+                             (pop-x (cdr s) (sub1 n))
                              s))))
                (lambda (get-token)
                  (let loop ((stack (list 0))
-                            (next (get-token)))
+                            (ip (get-token)))
+                   (display stack)
+                   (newline)
+                   (display (if (token? ip) (token-name ip) ip))
+                   (newline)
                    (let* ((s (car stack))
                           (a (hash-table-get term-sym->index 
-                                             (if (token? next)
-                                                 (token-name next)
-                                                 next)))
+                                             (if (token? ip)
+                                                 (token-name ip)
+                                                 ip)))
                           (action (array2d-ref table s a)))
                      (cond
                        ((shift? action)
-                        (loop (cons (shift-state action) (cons a stack)) (get-token)))
+                        (printf "shift:~a~n" (shift-state action))
+                        (loop (cons (shift-state action) stack) (get-token)))
                        ((reduce? action)
                         (printf "reduce:~a~n" (reduce-prod-num action))
                         (let* ((A (reduce-lhs-num action))
-                               (new-stack (pop-2x stack (reduce-rhs-length action)))
+                               (new-stack (pop-x stack (reduce-rhs-length action)))
                                (goto (array2d-ref table (car new-stack) A)))
-                          (loop (cons goto (cons A new-stack)) next)))
+                          (loop (cons goto new-stack) ip)))
                        ((accept? action)
                         (printf "accept~n"))
                        (else (error 'parser)))))))))
