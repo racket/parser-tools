@@ -84,6 +84,7 @@
            
 ;; run the calculator on the given input-port       
 (define (calc ip)
+  (port-count-lines! ip)
   (letrec ((one-line
 	    (lambda ()
 	      (let ((result (calcp (lambda () (calcl ip)))))
@@ -91,4 +92,4 @@
 		    (begin
 		      (printf "~a~n" result)
 		      (one-line)))))))
-    (one-line))))
+    (one-line)))

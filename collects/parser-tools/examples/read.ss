@@ -12,7 +12,7 @@
   
   (define-tokens data (DATUM))
   (define-empty-tokens delim (OP CP HASHOP QUOTE QUASIQUOTE UNQUOTE UNQUOTE-SPLICING DOT EOF))
-  
+
   (define scheme-lexer
     (lexer-src-pos
      
@@ -53,10 +53,10 @@
   
   (define-lex-abbrevs
    [any (- #\000 #\377)]
-   [letter (: (- a z) (- A Z))]
+   [letter (: (- a z) (- #\A #\Z))]
    [digit (- #\0 #\9)]
    [whitespace (: #\newline #\return #\tab #\space #\vtab)]
-   [initial (: (letter) ! $ % & * / : < = > ? ^ _ ~)]
+   [initial (: (letter) ! $ % & * / : < = > ? ^ _ ~ @)]
    [subsequent (: (initial) (digit) + - #\. @)]
    [comment (@ #\; (* (^ #\newline)) #\newline)]
    
@@ -191,8 +191,8 @@
            #f
            value
            (list source 
-                 (position-line start-pos)
-                 (position-col start-pos)
+                 (add1 (position-line start-pos))
+                 (add1 (position-col start-pos))
                  (position-offset start-pos)
                  (- (position-offset end-pos)
                     (position-offset start-pos)))
@@ -233,12 +233,13 @@
                  [(sexp-list sexp) (cons $2 $1)]))))
   
   (define (rs sn ip off)
-    ((scheme-parser sn) (lambda () (scheme-lexer ip)))))
+    (port-count-lines! ip)
+    ((scheme-parser sn) (lambda () (scheme-lexer ip))))
   
   (define readsyntax
     (case-lambda ((sn) (rs sn (current-input-port) (list 0 0 0)))
                  ((sn ip) (rs sn ip (list 0 0 0)))
-                 ((sn ip off) (rs sn ip off))))
+		 ((sn ip off) (rs sn ip off))))
 
   (provide (rename readsyntax read-syntax))
                         
