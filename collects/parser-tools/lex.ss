@@ -3,11 +3,13 @@
   ;; Provides the syntax used to create lexers and the functions needed to
   ;; create and use the buffer that the lexer reads from.  See doc.txt.
 	
-  (require-for-syntax "private-lex/generate-code.ss")
-  (require-for-syntax "private-lex/structs.ss")
+  (require-for-syntax "private-lex/generate-code.ss"
+                      "private-lex/structs.ss")
+
   (require (lib "list.ss")
            (lib "readerr.ss" "syntax")
            "private-lex/token.ss")
+
   (provide lexer lexer-src-loc define-lex-abbrev define-lex-abbrevs
 	   make-lex-buf
 	   get-position position-offset position-line position-col position?
@@ -15,127 +17,10 @@
   
   
   (define-syntaxes (lexer lexer-src-loc)
-    (let ((code
-           (lambda (wrap)
-             `(letrec ((match
-                        (lambda (lb first-pos longest-match-length longest-match-action length)
-                          (let ((match
-                                 (push-back lb (- length longest-match-length)))
-                                (end-pos (get-position lb)))
-                            (if (not longest-match-action)
-                                (raise-read-error
-                                 (format "lexer: No match found in input starting with: ~a"
-                                         (list->string (filter char? (lex-buffer-from lb))))
-                                 #f
-                                 (position-line first-pos)
-                                 (position-col first-pos)
-                                 (position-offset first-pos)
-                                 (- (position-offset end-pos) (position-offset first-pos))))
-                            (,wrap
-                             (longest-match-action
-                              (lambda ()
-                                first-pos)
-                              (lambda ()
-                                end-pos)
-                              (lambda ()
-                                (if (char? (car match))
-                                    (list->string (reverse match))
-                                    (list->string (reverse (cdr match)))))
-                              lb))))))
-                (lambda (lb)
-                  (unless (lex-buffer? lb)
-                    (raise-type-error 
-                     'lexer 
-                     "lex-buf"
-                     0
-                     lb))
-                  (let ((first-pos (get-position lb)))
-                    (let lexer-loop (
-                                     ;; current-state
-                                     (state start-state)
-                                     ;; the character to transition on
-                                     (char (next-char lb))
-                                     ;; action for the longest match seen thus far
-                                     ;; including a match at the current state
-                                     (longest-match-action 
-                                      (vector-ref actions start-state))
-                                     ;; how many characters have been read
-                                     ;; including the one just read
-                                     (length 1)
-                                     ;; how many characters are in the longest match
-                                     (longest-match-length 0))
-                      (let ((next-state
-                             (cond
-                               ((eof-object? char)
-                                (vector-ref eof-table state))
-                               (else
-                                (vector-ref 
-                                 trans-table
-                                 (bitwise-ior (char->integer char)
-                                              (arithmetic-shift state 8)))))))
-                        (cond
-                          ((not next-state) (match lb
-                                              first-pos
-                                              longest-match-length
-                                              longest-match-action
-                                              length))
-                          (else
-                           (let ((act (vector-ref actions next-state)))
-                             (lexer-loop next-state 
-                                         (next-char lb)
-                                         (if act
-                                             act
-                                             longest-match-action)
-                                         (add1 length)
-                                         (if act
-                                             length
-                                             longest-match-length)))))))))))))
-      (values
-       (lambda (stx)
-         (syntax-case stx ()
-           ((_)
-            (raise-syntax-error #f "empty lexer is not allowed" stx))
-           ((_ re-act ...)
-            (begin
-              (for-each
-               (lambda (x)
-                 (syntax-case x ()
-                   ((re act) (void))
-                   (_ (raise-syntax-error 'lexer 
-                                          "expects regular expression / action pairs"
-                                          x))))
-               (syntax->list (syntax (re-act ...))))
-              (let* ((table (generate-table (syntax (re-act ...)) stx))
-                     (code
-                      `(let ((start-state ,(table-start table))
-                             (trans-table ,(table-trans table))
-                             (eof-table ,(table-eof table))
-                             (actions (vector ,@(vector->list (table-actions table)))))
-                         ,(code `(lambda (x) x)))))
-                (datum->syntax-object #'here code #f))))))
-       (lambda (stx)
-         (syntax-case stx ()
-           ((_)
-            (raise-syntax-error #f "empty lexer is not allowed" stx))
-           ((_ re-act ...)
-            (begin
-              (for-each
-               (lambda (x)
-                 (syntax-case x ()
-                   ((re act) (void))
-                   (_ (raise-syntax-error 'lexer 
-                                          "expects regular expression / action pairs"
-                                          x))))
-               (syntax->list (syntax (re-act ...))))
-              (let* ((table (generate-table (syntax (re-act ...)) stx))
-                     (code
-                      `(let ((start-state ,(table-start table))
-                             (trans-table ,(table-trans table))
-                             (eof-table ,(table-eof table))
-                             (actions (vector ,@(vector->list (table-actions table)))))
-                         ,(code `(lambda (x) (list x first-pos end-pos))))))
-                (datum->syntax-object #'here code #f)))))))))
-  
+    (values
+     (build-lexer #'here `(lambda (x) x))
+     (build-lexer #'here `(lambda (x) (list x first-pos end-pos)))))
+
   
   (define-syntax (define-lex-abbrev stx)
     (syntax-case stx ()
