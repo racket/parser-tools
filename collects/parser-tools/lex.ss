@@ -97,7 +97,7 @@
              (let-values (((trans start action-names no-look disappeared-uses)
                            (build-lexer re-actname-lst)))
                (when (vector-ref action-names start)
-                 (raise-syntax-error #f "accepts the empty string" stx))
+                 (printf "Warning: lexer might accept the empty string ~a.~n" stx))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
                              (no-lookahead-stx no-look)

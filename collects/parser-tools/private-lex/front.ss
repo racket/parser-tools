@@ -44,12 +44,12 @@
                                                                         entry
                                                                         entry)
                                                        entry))))
-                                               char-ranges)))
-                                      all-chars/to))
-                          (lambda (a b)
-                            (< (vector-ref a 0) (vector-ref b 0))))))
-                   (vector-set! state-table from-state (list->vector flat-all-chars/to))))
-               (dfa-transitions dfa))
+                                 char-ranges)))
+                        all-chars/to))
+                 (lambda (a b)
+                   (< (vector-ref a 0) (vector-ref b 0))))))
+          (vector-set! state-table from-state (list->vector flat-all-chars/to))))
+      (dfa-transitions dfa))
      state-table))
   
          
