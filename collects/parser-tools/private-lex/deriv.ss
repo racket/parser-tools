@@ -1,6 +1,7 @@
 (module deriv mzscheme
   
   (require (lib "list.ss")
+           (prefix is: (lib "integer-set.ss"))
            "re.ss"
            "util.ss")
 
@@ -57,58 +58,6 @@
               ((get-char-groups (->re `(& (* ,r1) (@ (* ,r2) "3") "4") c) #f)
                (list r1 r2 (->re "3" c) (->re "4" c)))
               )
-               
-  
-  ;; partition : (list-of char-set) -> (list-of char-set)
-  ;; The coarsest refinment r of sets such that the char-sets in r
-  ;; are pairwise disjoint.
-  (define (partition sets)
-    (cond
-      ((null? sets) null)
-      (else
-       (partition1 (car sets) (partition (cdr sets))))))
-    
-  ;; partition1 : char-set (list-of char-set) -> (list-of char-set)
-  ;; All the char-sets in sets must be pairwise disjoint.  Splits set
-  ;; against each element in sets.
-  (define (partition1 set sets)
-    (cond
-      ((null? set) sets)
-      ((null? sets) (list set))
-      (else
-       (let ((set2 (car sets)))
-         (let-values (((i s1 s2) (split set set2)))
-           (let ((rest (partition1 s1 (cdr sets))))
-             (cond
-               ((null? i)
-                (cons s2 rest))
-               ((null? s2)
-                (cons i rest))
-               (else
-                (cons i (cons s2 rest))))))))))
-              
-  (test-block ((sl (lambda (str)
-                     (foldr (lambda (c cs)
-                              (merge (make-range (char->integer c) (char->integer c))
-                                     cs))
-                            null
-                            (string->list str)))))
-              ((partition null) null)
-              ((partition (list (sl "1234"))) (list (sl "1234")))
-              ((partition (list (sl "1234") (sl "0235")))
-               (list (sl "23") (sl "05") (sl "14")))
-              ((partition (list (sl "12349") (sl "02359") (sl "67") (sl "29")))
-               (list (sl "29") (sl "67") (sl "3") (sl "05") (sl "14")))
-              ((partition1 (sl "bcdjw") null) (list (sl "bcdjw")))
-              ((partition1 null null) null)
-              ((partition1 null (list (sl "a") (sl "b") (sl "1")))
-               (list (sl "a") (sl "b") (sl "1")))
-              ((partition1 (sl "bcdjw")
-                           (list (sl "z")
-                                 (sl "ab")
-                                 (sl "dj")))
-               (list (sl "z") (sl "b") (sl "a") (sl "dj") (sl "cw"))))
-              
                                  
   
   ;; deriveR : re char cache -> re
@@ -116,7 +65,7 @@
     (cond
       ((or (eq? r e) (eq? r z)) z)
       ((char-setR? r)
-       (if (char-in-set? c (char-setR-chars r)) e z))
+       (if (is:member? c (char-setR-chars r)) e z))
       ((concatR? r)
        (let* ((r1 (concatR-re1 r))
               (r2 (concatR-re2 r))
@@ -238,9 +187,9 @@
     (cond
       ((null? st) null)
       (else
-       (partition (map char-setR-chars
-                       (apply append (map (lambda (x) (get-char-groups (car x) #f))
-                                          (state-spec (car st)))))))))
+       (is:partition (map char-setR-chars
+                          (apply append (map (lambda (x) (get-char-groups (car x) #f))
+                                             (state-spec (car st)))))))))
   
   (test-block ((c (make-cache))
                (c->i char->integer)
@@ -248,9 +197,10 @@
                (r2 (->re `(- #\2 #\3) c)))
               ((compute-chars null) null)
               ((compute-chars (list (make-state null 1))) null)
-              ((compute-chars (list (make-state (list (cons r1 1) (cons r2 2)) 2)))
-               (list (make-range (c->i #\2) (c->i #\3)) (append (make-range (c->i #\1) (c->i #\1))
-                                                                (make-range (c->i #\4) (c->i #\4))))))
+              ((map is:integer-set-contents (compute-chars (list (make-state (list (cons r1 1) (cons r2 2)) 2))))
+               (list (is:integer-set-contents (is:make-range (c->i #\2) (c->i #\3)))
+                     (is:integer-set-contents (is:union (is:make-range (c->i #\1))
+                                                        (is:make-range (c->i #\4)))))))
   
   
   ;; A dfa is (make-dfa int int
@@ -293,7 +243,7 @@
           (else
            (let* ((state (car old-states))
                   (c (car cs))
-                  (new-re (derive (state-spec state) (get-a-char (car c)) cache)))
+                  (new-re (derive (state-spec state) (is:get-integer c) cache)))
              (cond
                (new-re
                 (let* ((new-state? #f)
@@ -322,7 +272,7 @@
                 (printf "state: ~a~n" (car trans))
                 (for-each (lambda (rule)
                             (printf "  -~a-> ~a~n"
-                                    (char-set->string (car rule))
+                                    (is:integer-set-contents (car rule))
                                     (cdr rule)))
                           (cdr trans)))
               (dfa-transitions x)))
