@@ -16,10 +16,13 @@
   ;; kernel = (make-kernel (LR1-item list) index)
   ;;   the list must be kept sorted according to item<? so that equal? can
   ;;   be used to compare kernels
+  ;;   Each kernel is assigned a uniqui index, 0 <= index < number of states
   ;; trans-key = (make-trans-key kernel gram-sym)
   (define-struct kernel (items index) (make-inspector))
   (define-struct trans-key (st gs) (make-inspector))
 
+  
+  ;; kernel-list-remove-duplicates: kernel list * int -> kernel list
   (define (kernel-list-remove-duplicates k num-states)
     (let ((v (make-vector num-states #f)))
       (for-each
@@ -28,19 +31,20 @@
        k)
       (let loop ((i 0))
 	(cond
-	 ((< i num-states)
-	  (let ((k (vector-ref v i)))
-	    (if k 
-		(cons k (loop (add1 i)))
-		(loop (add1 i)))))
-	 (else null)))))
-		
+          ((< i num-states)
+           (let ((k (vector-ref v i)))
+             (if k 
+                 (cons k (loop (add1 i)))
+                 (loop (add1 i)))))
+          (else null)))))
+  
 	  
 
   ;; LR0-automaton = object of class lr0%
   (define lr0%
     (class object%
       (super-instantiate ())
+      ;; Hash tables that map a trans-keys to a kernel
       (init term-hash non-term-hash)
       (init-field states epsilons num-terms num-non-terms)
       
@@ -64,6 +68,9 @@
       (define/public (get-states)
 	states)
 
+      (define/public (get-num-states)
+        (vector-length states))
+      
       (define/public (get-epsilon-trans)
 	epsilons)
 
@@ -157,8 +164,8 @@
   (define (build-lr0-automaton grammar)
 ;    (printf "LR(0) automaton:~n")
     (letrec (
-	     (terms (list->vector (grammar-terms grammar)))
-	     (non-terms (list->vector (grammar-non-terms grammar)))
+	     (terms (list->vector (send grammar get-terms)))
+	     (non-terms (list->vector (send grammar get-non-terms)))
 	     (num-non-terms (vector-length non-terms))
 	     (num-gram-syms (+ num-non-terms (vector-length terms)))
 	     (epsilons (make-hash-table 'equal))
@@ -170,12 +177,12 @@
 	     ;; steps.  Assumes that each non-term can be reduced to a string 
 	     ;; of terms.
 	     (first-non-term 
-	      (digraph (grammar-non-terms grammar)
+	      (digraph (send grammar get-non-terms)
 		       (lambda (nt)
 			 (filter non-term?
 				 (map (lambda (prod)
 					(sym-at-dot (make-item prod 0)))
-				      (get-nt-prods grammar nt))))
+				      (send grammar get-prods-for-non-term nt))))
 		       (lambda (nt) (list nt))
 		       (union non-term<?)
 		       (lambda () null)))
@@ -197,8 +204,9 @@
 				    (map (lambda (non-term) 
 					   (map (lambda (x) 
 						  (make-item x 0))
-						(get-nt-prods grammar 
-							      non-term)))
+						(send grammar 
+                                                      get-prods-for-non-term
+                                                      non-term)))
 					 (first-non-term next-gsym)))
 			     (LR0-closure (cdr i)))))
 		     (else
@@ -321,7 +329,7 @@
 		       (else null))))))))
 			
 	      
-	     (start (list (make-item (get-init-prod grammar) 0)))
+	     (start (list (make-item (send grammar get-init-prod) 0)))
 	     (startk (make-kernel start 0))
 	     (new-kernels (make-queue)))
       

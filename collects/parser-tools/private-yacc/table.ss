@@ -216,18 +216,18 @@
   ;; buile-table: grammar * string -> action2d-array
   (define (build-table g file suppress)
     (let* ((a (time (build-lr0-automaton g)))
-           (terms (grammar-terms g))
-           (non-terms (grammar-non-terms g))
+           (terms (send g get-terms))
+           (non-terms (send g get-non-terms))
            (get-term (list->vector terms))
            (get-non-term (list->vector non-terms))
-           (get-prod (list->vector (grammar-prods g)))
+           (get-prod (list->vector (send g get-prods)))
            (num-terms (vector-length get-term))
            (num-non-terms (vector-length get-non-term))
            (end-term-indexes 
             (map
              (lambda (term)
                (+ num-non-terms (gram-sym-index term)))
-             (grammar-end-terms g)))
+             (send g get-end-terms)))
            (num-gram-syms (+ num-terms num-non-terms))
            (table (make-array2d (vector-length (send a get-states)) num-gram-syms #f))
            (array2d-add!
@@ -239,7 +239,7 @@
                                    (array2d-set! v i1 i2 (cons a old))))
                   (else (if (not (equal? a old))
                             (array2d-set! v i1 i2 (list a old))))))))
-           (get-lookahead (compute-LA a g)))
+           (get-lookahead (time (compute-LA a g))))
       (time
        (send a for-each-state
              (lambda (state)
@@ -299,7 +299,7 @@
                               (exn:i/o:filesystem-detail e))))]
             (call-with-output-file file
               (lambda (port)
-                (display-parser a table get-term get-non-term (grammar-prods g)
+                (display-parser a table get-term get-non-term (send g get-prods)
                                 port)))))
       (resolve-conflicts a table num-terms num-non-terms suppress)
       table))

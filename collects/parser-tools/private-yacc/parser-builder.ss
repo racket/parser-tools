@@ -4,7 +4,8 @@
   (require "input-file-parser.ss"
            "table.ss"
            "parser-actions.ss"
-           "grammar.ss")
+           "grammar.ss"
+           (lib "class.ss"))
   
   (provide build-parser)
   
@@ -74,7 +75,7 @@
                          (else action)))
                      (vector->list table)))))
             
-           (num-non-terms (length (grammar-non-terms grammar)))
+           (num-non-terms (send grammar get-num-non-terms))
 
            (token-code
             `(let ((ht (make-hash-table)))
@@ -83,11 +84,11 @@
                           `(hash-table-put! ht 
                                             ',(gram-sym-symbol term)
                                             ,(+ num-non-terms (gram-sym-index term))))
-                        (grammar-terms grammar))
+                        (send grammar get-terms))
                  ht)))
            
            (actions-code
-            `(vector ,@(map prod-action (grammar-prods grammar)))))
+            `(vector ,@(map prod-action (send grammar get-prods)))))
       (values table-code
               token-code
               actions-code

@@ -1,53 +1,45 @@
 #cs
 (module grammar mzscheme
   
+  (require (lib "class.ss"))
+  
   ;; Constructs to create and access grammars, the internal
   ;; representation of the input to the parser generator.
     
   (provide 
      
-   (rename export-make-item make-item)
+   make-item
    make-term
    make-non-term
    make-prec
    make-prod
-   (rename make-gram make-grammar)
    
    ;; Things that work on items
    start-item? item-prod item->string 
-   sym-at-dot move-dot-right move-dot-right! item<? nullable-after-dot?
-
+   sym-at-dot move-dot-right item<? item-dot-pos
+   
    ;; Things that operate on grammar symbols
    gram-sym-symbol gram-sym-index term-prec gram-sym->string
-   non-term? term? nullable? non-term<? term<?
+   non-term? term? non-term<? term<?
    term-list->bit-vector term-index non-term-index
    
    ;; Things that work on precs
    prec-num prec-assoc
 
-   ;;Things that work on grammars
-   get-nt-prods get-init-prod 
-   (rename gram-non-terms grammar-non-terms) 
-   (rename gram-terms grammar-terms)
-   (rename gram-num-prods grammar-num-prods)
-   (rename gram-prods grammar-prods)
-   (rename gram-end-terms grammar-end-terms)
-
+   grammar%
+   
    ;; Things that work on productions
    prod-index prod-prec prod-rhs prod-lhs prod-action)
 
 
   ;;---------------------- LR items --------------------------
   
-  ;; LR-item = (make-item production nat (int | #f))
-  ;; The n field contains the least integer such the item is nullable
-  ;; after the dot if the dot is to the right of the nth position.
-  (define-struct item (prod dot-pos n) (make-inspector))
+  ;; LR-item = (make-item production nat)
+  ;; The dot-pos field is the index of the element in the rhs
+  ;; of prod that the dot immediately preceeds.
+  ;; Thus 0 <= dot-pos <= (vector-length rhs).
+  (define-struct item (prod dot-pos) (make-inspector))
 
-  (define (export-make-item a b)
-    (make-item a b #f))
- 
-  
   ;; item<?: LR-item * LR-item -> bool
   ;; Lexicographic comparison on two items.
   (define (item<? i1 i2)
@@ -59,6 +51,8 @@
 		     (d2 (item-dot-pos i2)))
 		 (< d1 d2))))))
 
+  ;; start-item?: LR-item -> bool
+  ;; The start production always has index 0
   (define (start-item? i)
     (= 0 (non-term-index (prod-lhs (item-prod i)))))
 
@@ -70,43 +64,18 @@
     (cond
      ((= (item-dot-pos i) (vector-length (prod-rhs (item-prod i)))) #f)
      (else (make-item (item-prod i)
-		      (add1 (item-dot-pos i))
-		      (item-n i)))))
-
-  ;; move-dot-right!: LR-item -> LR-item | #f
-  ;; moves the dot to the right in the item, unless it is at its 
-  ;; rightmost, then it returns false
-  (define (move-dot-right! i)
-    (cond
-     ((= (item-dot-pos i) (vector-length (prod-rhs (item-prod i)))) #f)
-     (else (set-item-dot-pos! i (add1 (item-dot-pos i)))
-	   i)))
+		      (add1 (item-dot-pos i))))))
 
   ;; sym-at-dot: LR-item -> gram-sym | #f
   ;; returns the symbol after the dot in the item or #f if there is none  
   (define (sym-at-dot i)
-    (let ((dp (item-dot-pos i)))
+    (let ((dp (item-dot-pos i))
+          (rhs (prod-rhs (item-prod i))))
       (cond
-       ((= dp (vector-length (prod-rhs (item-prod i)))) #f)
-       (else (vector-ref (prod-rhs (item-prod i)) dp)))))
+       ((= dp (vector-length rhs)) #f)
+       (else (vector-ref rhs dp)))))
   
-  ;; nullable-after-dot?: LR1-iten * grammar -> bool
-  ;; determines if the string after the dot is nullable
-  (define (nullable-after-dot? i g)
-    (let ((i-n (item-n i)))
-      (cond
-       (i-n (>= (item-dot-pos i) i-n))
-       (else
-	(let ((str (prod-rhs (item-prod i))))
-	  (let loop ((c (sub1 (vector-length str))))
-	    (cond
-	     ((= c -1) (set-item-n! i 0))
-	     ((term? (vector-ref str c)) (set-item-n! i (add1 c)))
-	     ((nullable? g (vector-ref str c)) (loop (sub1 c)))
-	     (else (set-item-n! i (add1 c))))))
-	(>= (item-dot-pos i) (item-n i))))))
-	
-
+ 
   ;; print-item: LR-item ->
   (define (item->string it)
     (let ((print-sym (lambda (i)
@@ -130,6 +99,8 @@
 
   ;; gram-sym = (make-term symbol int prec)
   ;;          | (make-non-term symbol int)
+  ;; Each term has a unique index 0 <= index < number of terms
+  ;; Each non-term has a unique index 0 <= index < number of non-terms  
   (define-struct term (sym index prec) (make-inspector))
   (define-struct non-term (sym index) (make-inspector))
 
@@ -152,6 +123,9 @@
   (define (gram-sym->string gs)
     (symbol->string (gram-sym-symbol gs)))
 
+  ;; term-list->bit-vector: term list -> int
+  ;; Creates a number where the nth bit is 1 if the term with index n is in 
+  ;; the list, and whose nth bit is 0 otherwise
   (define (term-list->bit-vector terms)
     (cond
       ((null? terms) 0)
@@ -166,44 +140,57 @@
   (define-struct prec (num assoc) (make-inspector))
 
   ;; ------------------------- Grammar ------------------------------
+
+  (define grammar%
+    (class object%
+      (super-instantiate ())
+      ;; prods: production list list
+      ;; where the nth element in the outermost list is the list of productions with the nth non-term as lhs
+      (init prods)
+      ;; nullable-non-terms is indexed by the non-term-index and is true iff non-term is nullable
+      (init-field terms non-terms nullable-non-terms end-terms)
   
-  ;; grammar = (make-gram (production list vector) 
-  ;;                      (production list)
-  ;;                      (bool vector)
-  ;;                      (non-term list)
-  ;;                      (term list)
-  ;;                      int
-  ;;                      (term list))
-  ;; 
-  ;; The nt-prods field is indexed by the number assigned to the non-term and
-  ;;   contains the list of productions for that non-term
-  ;; The prods field contains a list of all productions
-  ;; The nulls field is indexed by the index for a non-term and is trus iff 
-  ;;   the non-term is nullable
-  (define-struct gram 
-    (nt-prods prods nulls non-terms terms num-prods end-terms) 
-    (make-inspector))
+      ;; indexed by the index of the non-term - contains the list of productions for that non-term
+      (define nt->prods (list->vector prods))
+      ;; list of all productions
+      (define all-prods (apply append prods))
+      (define num-prods (length all-prods))
+      (define num-terms (length terms))
+      (define num-non-terms (length non-terms))
+      
+      (define/public (get-num-terms) num-terms)
+      (define/public (get-num-non-terms) num-non-terms)
+      
+      (define/public (get-prods-for-non-term nt)
+        (vector-ref nt->prods (non-term-index nt)))
+      (define/public (get-prods) all-prods)
+      (define/public (get-init-prod)
+        (car (vector-ref nt->prods 0)))
+      
+      (define/public (get-terms) terms)
+      (define/public (get-non-terms) non-terms)
+      
+      (define/public (get-num-prods) num-prods)
+      (define/public (get-end-terms) end-terms)
+      
+      (define/public (nullable-non-term? nt)
+        (vector-ref nullable-non-terms (non-term-index nt)))
 
-
-  ;; get-nt-prods: grammar * non-term -> production list
-  ;; returns the productions for the given non-term
-  (define (get-nt-prods g nt)
-    (vector-ref (gram-nt-prods g) (non-term-index nt)))
-  
-  
-  ;; get-init-prod: grammar -> production
-  ;; gets the starting production
-  (define (get-init-prod g)
-    (car (vector-ref (gram-nt-prods g) 0)))
-
-  
-
-  (define (nullable? g nt)
-    (vector-ref (gram-nulls g) (non-term-index nt)))
-
+      (define/public (nullable-after-dot? item)
+        (let* ((rhs (prod-rhs (item-prod item)))
+               (prod-length (vector-length rhs)))
+          (let loop ((i (item-dot-pos item)))
+            (cond
+              ((< i prod-length)
+               (if (and (non-term? (vector-ref rhs i)) (nullable-non-term? (vector-ref rhs i)))
+                   (loop (add1 i))
+                   #f))
+              ((= i prod-length) #t)))))))
+	
 
   ;; ------------------------ Productions ---------------------------
   
   ;; production = (make-prod non-term (gram-sym vector) int prec syntax-object)
+  ;; Each production has a unique index 0 <= index <= number of productions
   (define-struct prod (lhs rhs index prec action) (make-inspector))
 )

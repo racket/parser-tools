@@ -4,7 +4,11 @@
   ;; routines for parsing the input to the parser generator and producing a
   ;; grammar (See grammar.ss)
   
-  (require "yacc-helper.ss" "../private-lex/token-syntax.ss" "grammar.ss" (lib "list.ss"))
+  (require "yacc-helper.ss"
+           "../private-lex/token-syntax.ss"
+           "grammar.ss"
+           (lib "list.ss")
+           (lib "class.ss"))
 
   (provide parse-input get-term-list)
 
@@ -418,13 +422,11 @@
 ;;                                         (list-ref (cons start (cons end-non-term non-terms)) i)))
 ;;                                (loop (add1 i))))
 ;;                              (else (loop (add1 i)))))))
-          (make-grammar
-           (list->vector prods)
-           (apply append prods)
-           nulls
-           (cons start (cons end-non-term non-terms))
-           terms
-           (add1 counter)
-           (map (lambda (term-name)
-                  (hash-table-get term-table term-name))
-                end-terms)))))))
+          (make-object grammar%
+            prods
+            terms
+            (cons start (cons end-non-term non-terms))
+            nulls
+            (map (lambda (term-name)
+                   (hash-table-get term-table term-name))
+                 end-terms)))))))

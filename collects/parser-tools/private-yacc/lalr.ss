@@ -5,16 +5,22 @@
   
   (require "lr0.ss"
 	   "grammar.ss"
-	   "graph.ss"
 	   "array2d.ss"
 	   (lib "list.ss")
 	   (lib "class.ss"))
 
   (provide compute-LA)
 
-  ;; compute-DR: LR0-automaton * grammar -> (trans-key -> term list)
+  (define (list-head l n)
+    (cond
+      ((= 0 n) null)
+      (else (cons (car l) (list-head (cdr l) (sub1 n))))))
+  
+  
+  ;; compute-DR: LR0-automaton * grammar -> (trans-key -> term set)
   ;; computes for each state, non-term transition pair, the terminals
   ;; which can transition out of the resulting state
+  ;; output term set is represented in bit-vector form
   (define (compute-DR a g)
     (lambda (tk)
       (let ((r (send a run-automaton (trans-key-st tk) (trans-key-gs tk))))
@@ -22,7 +28,7 @@
          (filter
           (lambda (term)
             (send a run-automaton r term))
-          (grammar-terms g))))))
+          (send g get-terms))))))
   
   ;; compute-reads: 
   ;;   LR0-automaton * grammar -> (trans-key -> trans-key list)
@@ -31,88 +37,150 @@
       (let ((r (send a run-automaton (trans-key-st tk) (trans-key-gs tk))))
 	(map (lambda (x) (make-trans-key r x))
 	     (filter (lambda (non-term)
-		       (and (nullable? g non-term)
+		       (and (send g nullable-non-term? non-term)
 			    (send a run-automaton r non-term)))
-		     (grammar-non-terms g))))))
+		     (send g get-non-terms ))))))
 
-  ;; compute-read: LR0-automaton * grammar -> (trans-key -> term list)
+  ;; compute-read: LR0-automaton * grammar -> (trans-key -> term set)
+  ;; output term set is represented in bit-vector form
   (define (compute-read a g)
     (let* ((dr (compute-DR a g))
 	   (reads (compute-reads a g)))
       (digraph-tk->terml (send a get-mapped-non-term-keys)
 			 reads
 			 dr
-			 (vector-length (send a get-states))
-			 (length (grammar-terms g))
-			 (length (grammar-non-terms g)))))
-
+                         (send a get-num-states)
+			 (send g get-num-terms)
+			 (send g get-num-non-terms))))
   
-  ;; comput-includes-and-lookback: 
-  ;;   lr0-automaton * grammar -> (value (trans-key -> trans-key list)
-  ;;                                     (kernel * prod -> trans-key list))
-  (define (compute-includes-and-lookback a g)
-    (let* ((non-terms (grammar-non-terms g))
-	   (num-states (vector-length (send a get-states)))
-	   (num-non-terms (length non-terms))
-	   (includes (make-array2d num-states num-non-terms null))
-	   (lookback (make-array2d num-states
-				   (grammar-num-prods g)
-				   null)))
-      (send a for-each-state
-       (lambda (state)
-         (for-each
-          (lambda (non-term)
-            (for-each
-             (lambda (prod)
-               (let loop ((i (make-item prod 0))
-                          (p state))
-                 (if (and p i)
-                     (let* ((next-sym (sym-at-dot i))
-			    (new-i (move-dot-right i)))
-                       (if (and (non-term? next-sym)
-                                (nullable-after-dot? new-i g))
-                           (array2d-add! includes
-                                         (kernel-index p)
-                                         (gram-sym-index next-sym)
-                                         (make-trans-key state non-term)))
-                       (if (not new-i)
-                           (array2d-add! lookback
-                                         (kernel-index p)
-                                         (prod-index prod)
-                                         (make-trans-key state non-term)))
-                       (if next-sym
-                           (loop new-i
-                                 (send a run-automaton p next-sym)))))))
-             (get-nt-prods g non-term)))
-          non-terms)))
+  ;; run-lr0-backward: lr0-automaton * gram-sym list * kernel * int -> kernel list
+  ;; returns the list of all k such that state k transitions to state start on the
+  ;; transitions in rhs (in order)
+  (define (run-lr0-backward a rhs start num-states)
+    (let loop ((states (list start))
+               (rhs (reverse rhs)))
+      (cond
+        ((null? rhs) states)
+        (else (loop (kernel-list-remove-duplicates
+                     (send a run-automaton-back states (car rhs))
+                     num-states)
+                    (cdr rhs))))))
 
-      (values (lambda (tk)
-		(array2d-ref includes 
-			     (kernel-index (trans-key-st tk))
-			     (gram-sym-index (trans-key-gs tk))))
-	      (lambda (state prod)
-		(array2d-ref lookback
-			     (kernel-index state)
-			     (prod-index prod))))))
+  ;; prod->items-for-include: grammar * prod * non-term -> lr0-item list
+  ;; returns the list of all (B -> beta . nt gamma) such that prod = (B -> beta nt gamma)
+  ;; and gamma =>* epsilon
+  (define (prod->items-for-include g prod nt)
+    (let* ((rhs (prod-rhs prod))
+           (rhs-l (vector-length rhs)))
+      (append (if (and (> rhs-l 0) (eq? nt (vector-ref rhs (sub1 rhs-l))))
+                  (list (make-item prod (sub1 rhs-l)))
+                  null)
+              (let loop ((i (sub1 rhs-l)))
+                (cond
+                  ((and (> i 0) 
+                        (non-term? (vector-ref rhs i)) 
+                        (send g nullable-non-term? (vector-ref rhs i)))
+                   (if (eq? nt (vector-ref rhs (sub1 i)))
+                       (cons (make-item prod (sub1 i))
+                             (loop (sub1 i)))
+                       (loop (sub1 i))))
+                  (else null))))))
 
-  ;; compute-follow:  LR0-automaton * grammar -> (trans-key -> term list)
+  ;; prod-list->items-for-include: grammar * prod list * non-term -> lr0-item list
+  ;; return the list of all (B -> beta . nt gamma) such that  (B -> beta nt gamma) in prod-list
+  ;; and gamma =>* epsilon
+  (define (prod-list->items-for-include g prod-list nt)
+    (apply append (map (lambda (prod) (prod->items-for-include g prod nt)) prod-list)))
+  
+  ;; comput-includes: lr0-automaton * grammar -> (trans-key -> trans-key list)
+  (define (compute-includes a g)
+    (let ((non-terms (send g get-non-terms))
+          (num-states (send a get-num-states)))
+      (lambda (tk)
+        (let ((goal-state (trans-key-st tk))
+              (non-term (trans-key-gs tk)))
+          (apply append
+                 (map (lambda (B)
+                        (map (lambda (state)
+                               (make-trans-key state B))
+                             (kernel-list-remove-duplicates
+                              (let ((items (prod-list->items-for-include g (send g get-prods-for-non-term B) non-term)))
+                                (apply append
+                                       (map (lambda (item)
+                                              (let ((rhs (prod-rhs (item-prod item))))
+                                                (run-lr0-backward a 
+                                                                  (list-head (vector->list rhs)
+                                                                             (- (vector-length rhs)
+                                                                                (item-dot-pos item)))
+                                                                  goal-state 
+                                                                  num-states)))
+                                            items)))
+                              num-states)))
+                      non-terms))))))
+                 
+        
+  ;; comput-includes: lr0-automaton * grammar -> (trans-key -> trans-key list)
+;  (define (compute-includes a g)
+;    (let* ((non-terms (send g get-non-terms))
+;	   (num-states (vector-length (send a get-states)))
+;	   (num-non-terms (length non-terms))
+;	   (includes (make-array2d num-states num-non-terms null)))
+;      (send a for-each-state
+;	    (lambda (state)
+;              (for-each
+;               (lambda (non-term)
+;                 (for-each
+;                  (lambda (prod)
+;                    (let loop ((i (make-item prod 0))
+;                               (p state))
+;                      (if (and p i)
+;                          (let* ((next-sym (sym-at-dot i))
+;                                 (new-i (move-dot-right i)))
+;                            (if (and (non-term? next-sym)
+;                                     (send g nullable-after-dot? new-i))
+;                                (array2d-add! includes
+;                                              (kernel-index p)
+;                                              (gram-sym-index next-sym)
+;                                              (make-trans-key state non-term)))
+;                            (if next-sym
+;                                (loop new-i
+;                                      (send a run-automaton p next-sym)))))))
+;                  (send g get-prods-for-non-term non-term)))
+;               non-terms)))
+;      
+;      (lambda (tk)
+;	(array2d-ref includes 
+;		     (kernel-index (trans-key-st tk))
+;		     (gram-sym-index (trans-key-gs tk))))))
+;  
+  ; compute-lookback: lr0-automaton * grammar -> (kernel * proc -> trans-key list)
+  (define (compute-lookback a g)
+    (let ((num-states (send a get-num-states)))
+      (lambda (state prod)
+        (map (lambda (k) (make-trans-key k (prod-lhs prod)))
+             (run-lr0-backward a (vector->list (prod-rhs prod)) state num-states)))))
+  
+  ;; compute-follow:  LR0-automaton * grammar -> (trans-key -> term set)
+  ;; output term set is represented in bit-vector form
   (define (compute-follow a g includes)
     (let ((read (compute-read a g)))
       (digraph-tk->terml (send a get-mapped-non-term-keys)
-			includes
-			read
-			(vector-length (send a get-states))
-			(length (grammar-terms g))
-			(length (grammar-non-terms g)))))
-
-  ;; compute-LA: LR0-automaton * grammar -> (kernel * prod -> term list)
+                         includes
+                         read
+                         (send a get-num-states)
+                         (send g get-num-terms)
+                         (send g get-num-non-terms))))
+  
+  ;; compute-LA: LR0-automaton * grammar -> (kernel * prod -> term set)
+  ;; output term set is represented in bit-vector form
   (define (compute-LA a g)
-    (let-values (((includes lookback) (time (compute-includes-and-lookback a g))))
-      (let ((follow (time (compute-follow a g includes))))
-	(lambda (k p)
-	  (let* ((l (lookback k p))
-                 (f (map follow l)))
-	    (apply bitwise-ior (cons 0 f)))))))
+    (let* ((includes (compute-includes a g))
+	   (lookback (compute-lookback a g))
+	   (follow (compute-follow a g includes)))
+      (lambda (k p)
+	(let* ((l (lookback k p))
+	       (f (map follow l)))
+	  (apply bitwise-ior (cons 0 f))))))
 
 
   (define (print-DR dr a g)
@@ -141,7 +209,7 @@
                         state
                         (gram-sym-symbol non-term)
                         (print-output res)))))
-        (grammar-non-terms g))))
+        (send g get-non-terms))))
     (newline))
 
   (define (print-input-st-prod f name a g print-output)
@@ -159,8 +227,8 @@
                            (kernel-index state)
                            (prod-index prod)
                            (print-output res)))))
-           (get-nt-prods g non-term)))
-        (grammar-non-terms g)))))
+           (send g get-prods-for-non-term non-term)))
+        (send g get-non-terms)))))
   
   (define (print-output-terms r)
     (map 
