@@ -135,13 +135,13 @@
 
            (cache (make-cache))
            
-           (re-acts (time (map (lambda (s-re-act)
-                                 (cons (->re (car s-re-act) cache)
-                                       (cdr s-re-act)))
-                               s-re-acts)))
+           (re-acts (map (lambda (s-re-act)
+			   (cons (->re (car s-re-act) cache)
+				 (cdr s-re-act)))
+			 s-re-acts))
            
-           (dfa (time (build-dfa re-acts cache))))
+           (dfa (build-dfa re-acts cache)))
       ;(print-dfa dfa)
       ;(printf "states: ~a~n" (dfa-num-states dfa))
-      (values (time (dfa->1d-table dfa)) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa))))
+      (values (dfa->1d-table dfa) (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa))))
   )
