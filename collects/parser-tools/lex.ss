@@ -173,11 +173,10 @@
         #f
         (let* ((try (quotient (+ min max) 2))
                (el (vector-ref table try))
-               (range (car el))
-               (r1 (car range))
-               (r2 (cdr range)))
+               (r1 (vector-ref el 0))
+               (r2 (vector-ref el 1)))
           (cond
-            ((and (>= char r1) (<= char r2)) (cdr el))
+            ((and (>= char r1) (<= char r2)) (vector-ref el 2))
             ((< char r1) (get-next-state-helper char min try table))
             (else (get-next-state-helper char (add1 try) max table))))))
                
