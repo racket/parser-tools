@@ -308,7 +308,9 @@
       (build-dfa (map (lambda (x) (cons (->re x c) 'action))
                       rs)
                  c)))
-  #|
+
+  
+#|
   (define t1 (build-test-dfa null))
   (define t2 (build-test-dfa `(#\a)))
   (define t3 (build-test-dfa `(#\a #\b)))
@@ -325,5 +327,7 @@
                               (@ "-" (+ "-"))
                               "["
                               "]")))
+  (define y (build-test-dfa `((+ (: (@ "|" (* (^ "|")) "|")
+                                    (@ "|" (* (^ "|"))))))))
 |#
   )
