@@ -150,6 +150,7 @@
            (with-syntax ((check-syntax-fix check-syntax-fix)
                          (err error)
                          (ends end)
+                         (starts start)
                          (debug debug)
                          (table table)
                          (term-sym->index term-sym->index)
@@ -158,7 +159,7 @@
              (syntax
               (begin
                 check-syntax-fix
-                (parser-body debug err (quote ends) table term-sym->index actions src-pos)))))))
+                (parser-body debug err (quote starts) (quote ends) table term-sym->index actions src-pos)))))))
       (_
        (raise-syntax-error #f
                            "parser must have the form (parser args ...)"
@@ -188,7 +189,7 @@
   ;; an accept, shift or reduce structure - or a #f.  Except that we will encode
   ;; by changing (make-accept) -> 'accept, (make-shift i) -> i and
   ;; (make-reduce i1 i2 i3) -> #(i1 i2 i3)
-  (define (parser-body debug err ends table term-sym->index actions src-pos)
+  (define (parser-body debug err starts ends table term-sym->index actions src-pos)
     (letrec ((input->token
               (if src-pos
                   (lambda (ip)
@@ -341,5 +342,12 @@
                              (err #t (token-name tok) (token-value tok) (cadr ip) (caddr ip))
                              (err #t (token-name tok) (token-value tok)))
                          (parsing-loop (fix-error stack tok ip get-token) (get-token))))))))))
-      (make-parser 0)))
+      (cond
+        ((null? (cdr starts)) (make-parser 0))
+        (else
+         (let loop ((l starts)
+                    (i 0))
+           (cond
+             ((null? l) null)
+             (else (cons (make-parser i) (loop (cdr l) (add1 i))))))))))
   )

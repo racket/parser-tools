@@ -345,10 +345,13 @@
         (let* ((starts (map (lambda (x) (make-non-term (gensym) #f)) start-syms))
                (end-non-terms (map (lambda (x) (make-non-term (gensym) #f)) start-syms))
                (parsed-prods (map parse-prods-for-nt (cdr (syntax->list prods))))
+               (start-prods
+                (map (lambda (start end-non-term)
+                       (list (make-prod start (vector end-non-term) #f #f 
+                                        (datum->syntax-object runtime `(lambda (x) x)))))
+                     starts end-non-terms))
                (prods 
-                `(,@(map (lambda (start end-non-term)
-                           (list (make-prod start (vector end-non-term) #f #f #f)))
-                         starts end-non-terms)
+                `(,@start-prods
                   ,@(map
                      (lambda (end-nt start-sym)
                        (map
@@ -368,6 +371,7 @@
 
           (make-object grammar%
             prods
+            (map car start-prods)
             terms
             (append starts (append end-non-terms non-terms))
             (map (lambda (term-name)

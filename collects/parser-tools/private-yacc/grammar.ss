@@ -1,20 +1,41 @@
+;; Constructs to create and access grammars, the internal
+;; representation of the input to the parser generator.
+
 #cs
 (module grammar mzscheme
   
   (require (lib "class.ss")
            (lib "list.ss")
-           "yacc-helper.ss")
+           "yacc-helper.ss"
+           (lib "contracts.ss"))
   
-  ;; Constructs to create and access grammars, the internal
-  ;; representation of the input to the parser generator.
-    
+  ;; Each production has a unique index 0 <= index <= number of productions
+  (define-struct prod (lhs rhs index prec action) (make-inspector))
+
+  ;; The dot-pos field is the index of the element in the rhs
+  ;; of prod that the dot immediately preceeds.
+  ;; Thus 0 <= dot-pos <= (vector-length rhs).
+  (define-struct item (prod dot-pos) (make-inspector))
+  
+  ;; gram-sym = (or/f term? non-term?)
+  ;; Each term has a unique index 0 <= index < number of terms
+  ;; Each non-term has a unique index 0 <= index < number of non-terms  
+  (define-struct term (sym index prec) (make-inspector))
+  (define-struct non-term (sym index) (make-inspector))
+
+  ;; a precedence declaration.
+  (define-struct prec (num assoc) (make-inspector))
+  
+  (provide/contract
+   (make-item (prod? (or/f false? natural-number?) . -> . item?))
+   (make-term (symbol? (or/f false? natural-number?) (or/f prec? false?) . -> . term?))
+   (make-non-term (symbol? (or/f false? natural-number?) . -> . non-term?))
+   (make-prec (natural-number? (symbols 'left 'right 'nonassoc) . -> . prec?))
+   (make-prod (non-term? (vectorof (or/f non-term? term?))
+               (or/f false? natural-number?) (or/f false? prec?) syntax? . -> . prod?)))
+  
   (provide 
      
-   make-item
-   make-term
-   make-non-term
-   make-prec
-   make-prod
    
    ;; Things that work on items
    start-item? item-prod item->string 
@@ -36,12 +57,6 @@
 
   ;;---------------------- LR items --------------------------
   
-  ;; LR-item = (make-item production nat)
-  ;; The dot-pos field is the index of the element in the rhs
-  ;; of prod that the dot immediately preceeds.
-  ;; Thus 0 <= dot-pos <= (vector-length rhs).
-  (define-struct item (prod dot-pos) (make-inspector))
-
   ;; item<?: LR-item * LR-item -> bool
   ;; Lexicographic comparison on two items.
   (define (item<? i1 i2)
@@ -99,13 +114,6 @@
 
   ;; --------------------- Grammar Symbols --------------------------
 
-  ;; gram-sym = (make-term symbol int prec)
-  ;;          | (make-non-term symbol int)
-  ;; Each term has a unique index 0 <= index < number of terms
-  ;; Each non-term has a unique index 0 <= index < number of non-terms  
-  (define-struct term (sym index prec) (make-inspector))
-  (define-struct non-term (sym index) (make-inspector))
-
   (define (non-term<? nt1 nt2)
     (< (non-term-index nt1) (non-term-index nt2)))
   
@@ -134,12 +142,6 @@
       (else 
        (bitwise-ior (arithmetic-shift 1 (term-index (car terms))) (term-list->bit-vector (cdr terms))))))
   
-  ;; ------------------------- Precedences ---------------------------
-  
-  ;; a precedence declaration.  the sym should be 'left 'right or 'nonassoc
-  ;; prec = (make-prec int sym)
-  ;;      | #f
-  (define-struct prec (num assoc) (make-inspector))
 
   ;; ------------------------- Grammar ------------------------------
 
@@ -147,10 +149,12 @@
     (class object%
       (super-instantiate ())
       ;; prods: production list list
-      ;; where the nth element in the outermost list is the list of productions with the nth non-term as lhs
+      ;; where there is one production list per non-term
       (init prods)
+      ;; init-prods: production list
+      ;; The productions parsing can start from
       ;; nullable-non-terms is indexed by the non-term-index and is true iff non-term is nullable
-      (init-field terms non-terms end-terms)
+      (init-field init-prods terms non-terms end-terms)
   
       ;; list of all productions
       (define all-prods (apply append prods))
@@ -196,8 +200,7 @@
       (define/public (get-prods-for-non-term nt)
         (vector-ref nt->prods (non-term-index nt)))
       (define/public (get-prods) all-prods)
-      (define/public (get-init-prod)
-        (car (vector-ref nt->prods 0)))
+      (define/public (get-init-prods) init-prods)
       
       (define/public (get-terms) terms)
       (define/public (get-non-terms) non-terms)
@@ -275,9 +278,4 @@
                  nullable)))))))
 
   
-  ;; ------------------------ Productions ---------------------------
-  
-  ;; production = (make-prod non-term (gram-sym vector) int prec syntax-object)
-  ;; Each production has a unique index 0 <= index <= number of productions
-  (define-struct prod (lhs rhs index prec action) (make-inspector))
 )

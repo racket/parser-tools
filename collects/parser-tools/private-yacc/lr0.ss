@@ -226,7 +226,7 @@
 	     ;; list for each kernel
 	     (kernels (make-hash-table 'equal))
 
-	     (counter 1)
+	     (counter 0)
 	     
 	     ;; goto: LR1-item list -> LR1-item list list
 	     ;; creates new kernels by moving the dot in each item in the
@@ -331,12 +331,19 @@
 				  (loop (add1 i)))))))
 		       (else null))))))))
 			
-             (start (list (make-item (send grammar get-init-prod) 0)))
-	     (startk (make-kernel start 0))
+             (starts 
+              (map (lambda (init-prod) (list (make-item init-prod 0)))
+                   (send grammar get-init-prods)))
+	     (startk
+              (map (lambda (start)
+                     (let ((k (make-kernel start counter)))
+                       (hash-table-put! kernels start k)
+                       (set! counter (add1 counter))
+                       k))
+                   starts))
 	     (new-kernels (make-queue)))
       
-      (hash-table-put! kernels start startk)
-      (let loop ((old-kernels (list startk))
+      (let loop ((old-kernels startk)
 		 (seen-kernels null))
 	(cond
 	 ((and (empty-queue? new-kernels) (null? old-kernels))
