@@ -16,7 +16,7 @@
       so
       so)))
   
-  (define (fix-check-syntax start terms prods)
+  (define (fix-check-syntax start terms prods precs ends)
     (syntax-case prods ()
       ((_ (bind ((bound ...) x ...) ...) ...)
        (let ((binds (syntax->list (syntax (bind ...))))
@@ -28,11 +28,14 @@
                                   append 
                                   (map syntax->list 
                                        (syntax->list (syntax (((bound ...) ...) ...)))))))))
-             (terms (get-term-list terms)))
+             (terms (get-term-list terms))
+             (precs (syntax-case precs ()
+                      ((_ (__ term ...) ...)
+                       (apply append (map syntax->list (syntax->list (syntax ((term ...) ...)))))))))
          `(if #f (let ,(map (lambda (bind)
                               `(,(strip bind) void))
                             (append terms binds))
-                   (void ,@(map strip bounds))))))))
+                   (void ,@(append ends precs (map strip bounds)))))))))
   
   (define (build-parser filename src-pos suppress error-expr input-terms start end assocs prods runtime src)
     (let* ((grammar (parse-input start end input-terms assocs prods runtime src-pos))
@@ -235,5 +238,5 @@
                                #f #f #f #f #f)))))))))))
       (datum->syntax-object
        runtime
-       `(begin ,(fix-check-syntax start input-terms prods) ,parser-code)
+       `(begin ,(fix-check-syntax start input-terms prods assocs end) ,parser-code)
        src))))

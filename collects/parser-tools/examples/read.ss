@@ -1,6 +1,6 @@
 ;; This implements the equivalent of mzscheme's read-syntax for R5RS scheme.
 ;; It has not been thoroughly tested.  Also it will read an entire file into a 
-;; list of syntax objects
+;; list of syntax objects, instead of returning one syntax object at a time
 
  ;; Everything in this module will be read with case sensitivity.
 #cs

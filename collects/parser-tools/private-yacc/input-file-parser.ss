@@ -8,19 +8,23 @@
 
   (provide parse-input get-term-list)
 
-  ;; get-args: num * syntax-object -> syntax-object list
-  (define (get-args x act src-pos)
-    (let loop ((i 1))
-      (cond
-        ((> i x) null)
-        (src-pos
-         `(,(datum->syntax-object act (string->symbol (format "$~a" i)))
-           ,(datum->syntax-object act (string->symbol (format "$~a-start-pos" i)))
-           ,(datum->syntax-object act (string->symbol (format "$~a-end-pos" i)))
-           ,@(loop (add1 i))))
-        (else
-         `(,(datum->syntax-object act (string->symbol (format "$~a" i)))
-           ,@(loop (add1 i)))))))
+  (define stx-for-original-property (read-syntax #f (open-input-string "original")))
+
+  ;; get-args: int * syntax-object list * syntax-object -> syntax-object list
+  (define (get-args i rhs act src-pos)
+    (cond
+      ((null? rhs) null)
+      (else
+       (let ((b (syntax-local-introduce (car rhs))))
+         (cond
+           (src-pos
+            `(,(datum->syntax-object act (string->symbol (format "$~a" i)) b stx-for-original-property)
+              ,(datum->syntax-object act (string->symbol (format "$~a-start-pos" i)) b stx-for-original-property)
+              ,(datum->syntax-object act (string->symbol (format "$~a-end-pos" i)) b stx-for-original-property)
+              ,@(get-args (add1 i) (cdr rhs) act src-pos)))
+           (else
+            `(,(datum->syntax-object act (string->symbol (format "$~a" i)) b stx-for-original-property)
+              ,@(get-args (add1 i) (cdr rhs) act src-pos))))))))
     
   ;; nullable: production list * int -> non-term set
   ;; determines which non-terminals can derive epsilon
@@ -297,12 +301,12 @@
                     "production right-hand-side must have form (symbol ...)"
                     prod-so)))))
 	     
-             ;; parse-action: gram-sym vector * syntax-object -> syntax-object
+             ;; parse-action: syntax-object * syntax-object -> syntax-object
              (parse-action 
-              (lambda (prod act)
+              (lambda (rhs act)
                 (datum->syntax-object
                  runtime
-                 `(lambda ,(get-args (vector-length prod) act src-pos)
+                 `(lambda ,(get-args 1 (syntax->list rhs) act src-pos)
                     ,act)
                  act)))
              
@@ -326,7 +330,7 @@
                                   (term-prec gs)
                                   (loop (sub1 i))))
                             #f))
-                      (parse-action p (syntax action)))))
+                      (parse-action (syntax prod-rhs) (syntax action)))))
                   ((prod-rhs (prec term) action)
                    (identifier? (syntax term))
                    (let ((p (parse-prod (syntax prod-rhs))))
@@ -346,7 +350,7 @@
                             "unrecognized terminal ~a in precedence declaration"
                             (syntax-object->datum (syntax term)))
                            (syntax term)))))
-                      (parse-action p (syntax action)))))
+                      (parse-action (syntax prod-rhs) (syntax action)))))
                   (_
                    (raise-syntax-error
                     'parser-production-rhs
