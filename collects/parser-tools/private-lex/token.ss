@@ -40,46 +40,48 @@
              0
              t))))
   
-  (define-syntaxes (define-tokens define-empty-tokens)
-    (let ((define-tokens-helper 
-           (lambda (stx empty?)
-             (syntax-case stx ()
-               ((_ name (terms ...))
-                (andmap identifier? (syntax->list (syntax (terms ...))))
-                (datum->syntax-object
-                 #'here
-                 `(begin
-                    (define-syntax ,(syntax name)
-                      ,(if empty?
-                           `(make-e-terminals-def (quote-syntax ,(syntax (terms ...))))
-                           `(make-terminals-def (quote-syntax ,(syntax (terms ...))))))
-                    ,@(map
-                       (lambda (n)
-                         (if (eq? (syntax-object->datum n) 'error)
-                             (raise-syntax-error
-                              #f
-                              "Cannot define a token named error."
-                              stx))
-                         `(define (,(datum->syntax-object 
-                                     n
-                                     (string->symbol 
-                                      (format "token-~a" (syntax-object->datum n))) 
-                                     n
-                                     n)
-                                   ,@(if empty? '() '(x)))
-                            ,(if empty?
-                                 `',n
-                                 `(make-token ',n x))))
-                       (syntax->list (syntax (terms ...)))))
-                 stx))
-               ((_ ...)
-                (raise-syntax-error 
-                 #f
-                 "must have the form (define-tokens name (symbol ...)) or (define-empty-tokens name (symbol ...))"
-                 stx))))))
-      (values
-       (lambda (stx) (define-tokens-helper stx #f))
-       (lambda (stx) (define-tokens-helper stx #t)))))
+  (define-for-syntax (make-ctor-name n)
+    (datum->syntax-object n
+                          (string->symbol  (format "token-~a" (syntax-e n)))
+                          n
+                          n))
+  
+  (define-for-syntax (make-define-tokens empty?)
+    (lambda (stx)
+      (syntax-case stx ()
+        ((_ name (token ...))
+         (andmap identifier? (syntax->list (syntax (token ...))))
+         (with-syntax (((marked-token ...)
+                        (map (make-syntax-introducer)
+                             (syntax->list (syntax (token ...))))))
+           (quasisyntax/loc stx
+             (begin
+               (define-syntax name
+                 #,(if empty?
+                       #'(make-e-terminals-def (quote-syntax (marked-token ...)))
+                       #'(make-terminals-def (quote-syntax (marked-token ...)))))
+               #,@(map
+                   (lambda (n)
+                     (when (eq? (syntax-e n) 'error)
+                       (raise-syntax-error
+                        #f
+                        "Cannot define a token named error."
+                        stx))
+                     (if empty?
+                         #`(define (#,(make-ctor-name n))
+                             '#,n)
+                         #`(define (#,(make-ctor-name n) x)
+                             (make-token '#,n x))))
+                   (syntax->list (syntax (token ...))))
+               (define-syntax marked-token #f) ...))))
+        ((_ ...)
+         (raise-syntax-error 
+          #f
+          "must have the form (define-tokens name (identifier ...)) or (define-empty-tokens name (identifier ...))"
+          stx)))))
+  
+  (define-syntax define-tokens (make-define-tokens #f))
+  (define-syntax define-empty-tokens (make-define-tokens #t))
 
   (define-struct position (offset line col))
   (define-struct position-token (token start-pos end-pos))

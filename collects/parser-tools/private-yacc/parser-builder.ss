@@ -5,10 +5,12 @@
            "table.ss"
            (lib "class.ss")
            (lib "contract.ss"))
+  (require-for-template mzscheme)
   
   (provide/contract
-   (build-parser ((string? any? any? syntax? (listof syntax?) (listof syntax?)
-                   (union syntax? false?) syntax?) . ->* . (any? any? any? any?))))
+   (build-parser ((string? any? any? (listof identifier?) (listof identifier?)
+                  (listof identifier?) (union syntax? false?) syntax?) . ->* .
+                 (any? any? any? any?))))
   
   (define (strip so)
     (syntax-local-introduce
@@ -18,38 +20,60 @@
       so
       so)))
   
-  (define (fix-check-syntax start term-groups prods precs ends)
-    (syntax-case prods ()
-      ((_ (bind ((bound ...) x ...) ...) ...)
-       (let ((binds (syntax->list (syntax (bind ...))))
-             (bounds (append start 
-                             (apply 
-                              append 
-                              (map syntax->list 
-                                   (apply 
-                                    append 
-                                    (map syntax->list 
-                                         (syntax->list (syntax (((bound ...) ...) ...)))))))))
-             (terms (get-term-list term-groups))
-             (term-group-stx
-              (map (lambda (tg)
-                     (syntax-property
-                      (datum->syntax-object tg #f)
-                      'disappeared-use
-                      tg))
-                   (syntax->list term-groups)))
-             (precs (if precs
-                        (syntax-case precs ()
-                          ((_ (__ term ...) ...)
-                           (apply append (map syntax->list (syntax->list (syntax ((term ...) ...)))))))
-                        null)))
-         `(if #f (let ,(map (lambda (bind)
-                              `(,(strip bind) void))
-                            (append terms binds))
-                   (void ,@(append ends precs term-group-stx (map strip bounds)))))))))
+  ;; fix-check-syntax : (listof identifier?) (listof identifier?) (listof identifier?)
+  ;;                    (union syntax? false?) syntax?) -> syntax?
+  (define (fix-check-syntax input-terms start end assocs prods)
+    (let* ((term-binders (get-term-list input-terms))
+           (get-term-binder
+            (let ((t (make-hash-table)))
+              (for-each 
+               (lambda (term)
+                 (hash-table-put! t (syntax-e term) term))
+               term-binders)
+              (lambda (x)
+                (hash-table-get t (syntax-e x) (lambda () x)))))
+           (rhs-list
+            (syntax-case prods ()
+              (((_ rhs ...) ...)
+               (syntax->list (syntax (rhs ... ...)))))))
+      (with-syntax (((tmp ...) term-binders)
+                    ((term-group ...)
+                     (map (lambda (tg)
+                            (syntax-property
+                             (datum->syntax-object tg #f)
+                             'disappeared-use
+                             tg))
+                          input-terms))
+                    ((end ...)
+                     (map get-term-binder end))
+                    ((bind ...)
+                     (syntax-case prods ()
+                       (((bind _ ...) ...) (syntax->list (syntax (bind ...))))))
+                    (((bound ...) ...)
+                     (map
+                      (lambda (rhs)
+                        (syntax-case rhs ()
+                          (((bound ...) (_ pbound) __)
+                           (map get-term-binder
+                                (cons (syntax pbound)
+                                      (syntax->list (syntax (bound ...))))))
+                          (((bound ...) _)
+                           (map get-term-binder
+                                (syntax->list (syntax (bound ...)))))))
+                      rhs-list))
+                    ((prec ...)
+                     (if assocs
+                         (map get-term-binder
+                              (syntax-case assocs ()
+                                ((_ (__ term ...) ...)
+                                 (syntax->list (syntax (term ... ...))))))
+                         null)))
+             #`(when #f
+                 (let ((bind void) ... (tmp void) ...)
+                   (void bound ... ... term-group ... end ... prec ...))))))
   
   (define (build-parser filename src-pos suppress input-terms start end assocs prods)
-    (let* ((grammar (parse-input start end input-terms assocs prods src-pos))
+    (let* ((grammar (parse-input input-terms start end assocs prods src-pos))
            (table (build-table grammar filename suppress))
            (num-non-terms (send grammar get-num-non-terms))
            (token-code
@@ -66,6 +90,6 @@
     (values table
             token-code
             actions-code
-            (fix-check-syntax start input-terms prods assocs end))))
+            (fix-check-syntax input-terms start end assocs prods))))
       
   )

@@ -12,12 +12,13 @@
   
 
   (provide/contract 
-   (parse-input ((listof syntax?) (listof syntax?) syntax? (union false? syntax?) syntax? any? . -> . (is-a?/c grammar%)))
-   (get-term-list (syntax? . -> . (listof syntax?))))
+   (parse-input ((listof identifier?) (listof identifier?) (listof identifier?)
+                 (union false? syntax?) syntax? any? . -> . (is-a?/c grammar%)))
+   (get-term-list ((listof identifier?) . -> . (listof identifier?))))
 
   (define stx-for-original-property (read-syntax #f (open-input-string "original")))
 
-  ;; get-args: int * syntax-object list * syntax-object -> syntax-object list
+  ;; get-args: ???
   (define (get-args i rhs src-pos term-defs)
     (let ((empty-table (make-hash-table)))
       (hash-table-put! empty-table 'error #t)
@@ -27,7 +28,7 @@
                         (for-each (lambda (s)
                                     (hash-table-put! empty-table (syntax-object->datum s) #t))
                                   (syntax->list (e-terminals-def-t v))))))
-                (cdr (syntax->list term-defs)))
+                term-defs)
       (let get-args ((i i) 
                      (rhs rhs))
         (cond
@@ -79,7 +80,7 @@
        term-list)))
   
   ;; Retrieves the terminal symbols from a terminals-def (See terminal-syntax.ss)
-  ;; get-terms-from-def: syntax-object -> symbol list
+  ;; get-terms-from-def: identifier? -> (listof identifier?)
   (define (get-terms-from-def term-syn)
     (let ((t (syntax-local-value term-syn (lambda () #f))))
       (cond
@@ -91,48 +92,34 @@
          "undefined token group"
          term-syn)))))
 
-  ;; get-term-list: syntax-object -> syntax-object list
-  (define (get-term-list so)
-    (syntax-case* so (tokens)
-      (lambda (a b)
-        (eq? (syntax-object->datum a) (syntax-object->datum b)))
-      ((tokens term-def ...)
-       (andmap identifier? (syntax->list (syntax (term-def ...))))
-       (remove-duplicates
-        (cons (datum->syntax-object #f 'error)
-              (apply append
-                     (map get-terms-from-def 
-                          (syntax->list (syntax (term-def ...))))))))
-      (_
-       (raise-syntax-error
-        'parser-tokens
-        "Token declaration must be (tokens symbol ...)"
-        so))))
+  (define (get-term-list term-group-names)
+    (remove-duplicates
+     (cons (datum->syntax-object #f 'error)
+           (apply append
+                  (map get-terms-from-def term-group-names)))))
   
-  (define (parse-input start ends term-defs prec-decls prods src-pos)
-    (let* ((start-syms (map syntax-object->datum start))
+  (define (parse-input term-defs start ends prec-decls prods src-pos)
+    (let* ((start-syms (map syntax-e start))
            
-           (list-of-terms (map syntax-object->datum (get-term-list term-defs)))
+           (list-of-terms (map syntax-e (get-term-list term-defs)))
 
            (end-terms
             (map
              (lambda (end)
-               (if (not (memq (syntax-object->datum end) list-of-terms))
-                   (raise-syntax-error
-                    'parser-end-tokens
-                    (format "End token ~a not defined as a token"
-                            (syntax-object->datum end))
-                    end)
-                   (syntax-object->datum end)))
+               (unless (memq (syntax-e end) list-of-terms)
+                 (raise-syntax-error
+                  'parser-end-tokens
+                  (format "End token ~a not defined as a token"
+                          (syntax-e end))
+                  end))
+               (syntax-e end))
              ends))
                      
            ;; Get the list of terminals out of input-terms
            
            (list-of-non-terms
-            (syntax-case* prods (grammar)
-              (lambda (a b)
-                (eq? (syntax-object->datum a) (syntax-object->datum b)))
-              ((grammar (non-term production ...) ...)
+            (syntax-case prods ()
+              (((non-term production ...) ...)
                (begin
                  (for-each
                   (lambda (nts)
@@ -162,10 +149,8 @@
            
            ;; Check the precedence declarations for errors and turn them into data
            (precs
-            (syntax-case* prec-decls (precs)
-              (lambda (a b)
-                (eq? (syntax-object->datum a) (syntax-object->datum b)))
-              ((precs (type term ...) ...)
+            (syntax-case prec-decls ()
+              (((type term ...) ...)
                (let ((p-terms 
                       (apply append (syntax-object->datum 
                                      (syntax ((term ...) ...))))))
@@ -273,9 +258,7 @@
 	     ;; parse-prod+action: non-term * syntax-object -> production
 	     (parse-prod+action
 	      (lambda (nt prod-so)
-                (syntax-case* prod-so (prec)
-                  (lambda (a b)
-                    (eq? (syntax-object->datum a) (syntax-object->datum b)))
+                (syntax-case prod-so ()
                   ((prod-rhs action)
                    (let ((p (parse-prod (syntax prod-rhs))))
                      (make-prod 
@@ -342,7 +325,7 @@
                  
         (let* ((starts (map (lambda (x) (make-non-term (gensym) #f)) start-syms))
                (end-non-terms (map (lambda (x) (make-non-term (gensym) #f)) start-syms))
-               (parsed-prods (map parse-prods-for-nt (cdr (syntax->list prods))))
+               (parsed-prods (map parse-prods-for-nt (syntax->list prods)))
                (start-prods
                 (map (lambda (start end-non-term)
                        (list (make-prod start (vector end-non-term) #f #f 

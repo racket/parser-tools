@@ -27,20 +27,22 @@
              (yacc-output #f))
          (for-each
           (lambda (arg)
-            (syntax-case* arg (debug error tokens start end precs grammar suppress src-pos yacc-output)
+            (syntax-case* arg (debug error tokens start end precs grammar
+                               suppress src-pos yacc-output)
               (lambda (a b)
-                (eq? (syntax-object->datum a) (syntax-object->datum b)))
+                (eq? (syntax-e a) (syntax-e b)))
               ((debug filename)
                (cond
-                 ((not (string? (syntax-object->datum (syntax filename))))
+                 ((not (string? (syntax-e (syntax filename))))
                   (raise-syntax-error 
-                   'parser-debug
+                   #f
                    "Debugging filename must be a string"
+                   stx
                    (syntax filename)))
                  (debug
                   (raise-syntax-error #f "Multiple debug declarations" stx))
                  (else
-                  (set! debug (syntax-object->datum (syntax filename))))))
+                  (set! debug (syntax-e (syntax filename))))))
               ((suppress)
                (set! suppress #t))
               ((src-pos)
@@ -50,65 +52,84 @@
                    (raise-syntax-error #f "Multiple error declarations" stx)
                    (set! error (syntax expression))))
               ((tokens def ...)
-               (if tokens
-                   (raise-syntax-error  #f "Multiple tokens declarations" stx)
-                   (set! tokens arg)))
+               (begin
+                 (when tokens
+                   (raise-syntax-error  #f "Multiple tokens declarations" stx))
+                 (let ((defs (syntax->list (syntax (def ...)))))
+                   (for-each 
+                    (lambda (d)
+                      (unless (identifier? d)
+                        (raise-syntax-error 
+                         #f 
+                         "Token-group name must be an identifier"
+                         stx
+                         d)))
+                    defs)
+                   (set! tokens defs))))
               ((start symbol ...)
                (let ((symbols (syntax->list (syntax (symbol ...)))))
                  (for-each
                   (lambda (sym)
                     (unless (identifier? sym)
-                      (raise-syntax-error 'parser-start
+                      (raise-syntax-error #f
                                           "Start symbol must be a symbol"
+                                          stx
                                           sym)))
                   symbols)
                  (when start
                    (raise-syntax-error #f "Multiple start declarations" stx))
                  (when (null? symbols)
-                   (raise-syntax-error 'parser-start
+                   (raise-syntax-error #f
                                        "Missing start symbol"
-                                       stx))
+                                       stx
+                                       arg))
                  (set! start symbols)))
               ((end symbols ...)
                (let ((symbols (syntax->list (syntax (symbols ...)))))
                  (for-each
                   (lambda (sym)
                     (unless (identifier? sym)
-                      (raise-syntax-error 'parser-end
+                      (raise-syntax-error #f
                                           "End token must be a symbol"
+                                          stx
                                           sym)))
                   symbols)
-                 (let ((d (duplicate-list? (map syntax-object->datum symbols))))
+                 (let ((d (duplicate-list? (map syntax-e symbols))))
                    (when d
-                     (raise-syntax-error 'parser-end
-                                         (format "Duplicate end token definition for ~a" d)
-                                         arg))
+                     (raise-syntax-error
+                      #f
+                      (format "Duplicate end token definition for ~a" d)
+                      stx
+                      arg))
                    (when (null? symbols)
-                     (raise-syntax-error 'parser-end
-                                         "end declaration must contain at least 1 token"
-                                         arg))
+                     (raise-syntax-error
+                      #f
+                      "end declaration must contain at least 1 token"
+                      stx
+                      arg))
                    (when end
                      (raise-syntax-error #f "Multiple end declarations" stx))
                    (set! end symbols))))
               ((precs decls ...)
                (if precs
                    (raise-syntax-error #f "Multiple precs declarations" stx)
-                   (set! precs arg)))
+                   (set! precs (syntax/loc arg (decls ...)))))
               ((grammar prods ...)
                (if grammar
                    (raise-syntax-error #f "Multiple grammar declarations" stx)
-                   (set! grammar arg)))
+                   (set! grammar (syntax/loc arg (prods ...)))))
               ((yacc-output filename)
                (cond
-                 ((not (string? (syntax-object->datum (syntax filename))))
-                  (raise-syntax-error 'parser-yacc-output
+                 ((not (string? (syntax-e (syntax filename))))
+                  (raise-syntax-error #f
                                       "Yacc-output filename must be a string"
+                                      stx
                                       (syntax filename)))
                  (yacc-output
                   (raise-syntax-error #f "Multiple yacc-output declarations" stx))
                  (else
-                  (set! yacc-output (syntax-object->datum (syntax filename))))))
-              (_ (raise-syntax-error 'parser-args "argument must match (debug filename), (error expression), (tokens def ...), (start non-term), (end tokens ...), (precs decls ...), or  (grammar prods ...)" arg))))
+                  (set! yacc-output (syntax-e (syntax filename))))))
+              (_ (raise-syntax-error #f "argument must match (debug filename), (error expression), (tokens def ...), (start non-term), (end tokens ...), (precs decls ...), or  (grammar prods ...)" stx arg))))
           (syntax->list (syntax (args ...))))
          (unless tokens
            (raise-syntax-error #f "missing tokens declaration" stx))
