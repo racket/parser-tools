@@ -155,10 +155,10 @@
                                                                 (reduce-prod-num action))
                                                     args)
                                                   ,(if (null? args)
-                                                       (caddr new-stack)
+                                                       (cadr ip)
                                                        (cadr args))
                                                   ,(if (null? args)
-                                                       (caddr new-stack)
+                                                       (cadr ip)
                                                        (list-ref args (- (* (reduce-rhs-length action) 3) 1)))
                                                   ,@new-stack)
                                                ``(,goto 
