@@ -334,5 +334,6 @@
   (define t13 (build-test-dfa `((intersection (concatenation (intersection) "111" (intersection))
                                               (complement (union (concatenation (intersection) "01")
                                        (repeat 1 +inf.0 "1")))))))
+  (define t14 (build-test-dfa `((complement "1"))))
 |#
   )

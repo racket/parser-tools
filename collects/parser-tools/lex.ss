@@ -98,6 +98,8 @@
 				       name-lst)))
              (let-values (((trans start action-names no-look disappeared-uses)
                            (build-lexer re-actname-lst)))
+               #;(when (vector-ref action-names start)
+                 (raise-syntax-error #f "accepts the empty string" stx))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
                              (no-lookahead-stx no-look)
@@ -249,7 +251,7 @@
                                       ;; including the one just read
                                       (length-chars 1)
                                       ;; how many characters are in the longest match
-                                      (longest-match-length 1))
+                                      (longest-match-length 0))
                        (let ((next-state 
                               (cond
                                 ((eof-object? char) #f)
