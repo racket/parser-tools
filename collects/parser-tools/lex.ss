@@ -20,7 +20,8 @@
 			(let ((match 
 			       (push-back lb (- length longest-match-length))))
 			  (if (not longest-match-action)
-			      (error 'lex "No match found in rest of input"))
+			      (error 'lexer (format "No match found in input starting with: ~a" 
+                                                    (list->string (lex-buffer-from lb)))))
 			  (longest-match-action
 			   (lambda ()
 			     first-pos)
@@ -33,9 +34,11 @@
 			   lb)))))
 	      (lambda (lb)
 		(unless (lex-buffer? lb)
-			(error 'lex 
-			       (format 
-				"Lexer expects argument of type lex-buf; given ~a" lb)))
+                  (raise-type-error 
+                   'lexer 
+                   "lex-buf"
+                   0
+                   lb))
 		(let ((first-pos (get-position lb)))
 		  (let lexer-loop (
 				   ;; current-state
@@ -51,7 +54,6 @@
 				   (length 1)
 				   ;; how many characters are in the longest match
 				   (longest-match-length 0)
-				   ;;(end-pos first-pos))
 				   (end-pos first-pos))
 		    (let ((next-state
 			   (cond
@@ -84,56 +86,55 @@
 				      pos)))))))))))
       (lambda (stx)
 	(syntax-case stx ()
-		     ((_ (re act) ...) 
-		      (let* ((table (generate-table (syntax ((re act) ...)) 
-						    stx))
-			     (code
-			      `(let ((start-state ,(table-start table))
-				     (trans-table ,(table-trans table))
-				     (eof-table ,(table-eof table))
-				     (actions (vector ,@(vector->list (table-actions table)))))
-				 ,code)))
-			(datum->syntax-object #'here code #f)))))))
+          ((_ (re1 act1) (re act) ...) 
+           (let* ((table (generate-table (syntax ((re1 act1) (re act) ...)) stx))
+                  (code
+                   `(let ((start-state ,(table-start table))
+                          (trans-table ,(table-trans table))
+                          (eof-table ,(table-eof table))
+                          (actions (vector ,@(vector->list (table-actions table)))))
+                      ,code)))
+             (datum->syntax-object #'here code #f)))
+          (_
+           (raise-syntax-error #f "Form should be (lexer (re act) ...) with at least 1 (re ast) pair" stx))))))
   
   
   
-  (define-syntax define-lex-abbrev
-    (lambda (stx)
-      (syntax-case stx ()
-        ((_ name val)
-         (syntax
-          (define-syntax name
-            (make-lex-abbrev (quote-syntax val)))))
-        (_ 
-         (raise-syntax-error
-          #f
-          "Form should be (define-lex-abbrev name val)"
-          stx)))))
+  (define-syntax (define-lex-abbrev stx)
+    (syntax-case stx ()
+      ((_ name re)
+       (syntax
+        (define-syntax name
+          (make-lex-abbrev (quote-syntax re)))))
+      (_ 
+       (raise-syntax-error
+        #f
+        "Form should be (define-lex-abbrev name re)"
+        stx))))
 
-  (define-syntax define-lex-abbrevs
-    (lambda (stx)
-      (syntax-case stx ()
-        ((_ x ...)
-         (let* ((abbrev (syntax->list (syntax (x ...))))
-                (r (map (lambda (a)
-                          (syntax-case a ()
-                            ((name val)
-                             (identifier? (syntax name))
-                             (syntax (define-lex-abbrev name val)))
-                            (_ (raise-syntax-error
-                                #f 
-                                "Lexer abbreviation must be (identifier value)"
-                                a))))
-                        abbrev)))
-           (datum->syntax-object
-            #'here
-            (cons 'begin r)
-            stx)))
-        (_
-         (raise-syntax-error
-          #f
-          "Form should be (define-lex-abbrevs (name val) ...)"
-          stx)))))
+  (define-syntax (define-lex-abbrevs stx)
+    (syntax-case stx ()
+      ((_ x ...)
+       (let* ((abbrev (syntax->list (syntax (x ...))))
+              (r (map (lambda (a)
+                        (syntax-case a ()
+                          ((name re)
+                           (identifier? (syntax name))
+                           (syntax (define-lex-abbrev name re)))
+                          (_ (raise-syntax-error
+                              'Lexer-abbreviation 
+                              "Form should be (identifier value)"
+                              a))))
+                      abbrev)))
+         (datum->syntax-object
+          #'here
+          (cons 'begin r)
+          stx)))
+      (_
+       (raise-syntax-error
+        #f
+        "Form should be (define-lex-abbrevs (name re) ...)"
+        stx))))
 
   ;; Lex buffer is NOT thread safe
 
