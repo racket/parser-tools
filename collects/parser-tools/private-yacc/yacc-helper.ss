@@ -64,7 +64,7 @@
   (define (display-yacc grammar tokens start precs port)
     (let-syntax ((p (syntax-rules ()
                       ((_ args ...) (fprintf port args ...)))))
-      (let* ((tokens (map syntax-local-value (syntax->list tokens)))
+      (let* ((tokens (map syntax-local-value tokens))
              (eterms (filter e-terminals-def? tokens))
              (terms (filter terminals-def? tokens))
              (term-table (make-hash-table))

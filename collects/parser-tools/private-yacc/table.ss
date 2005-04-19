@@ -114,6 +114,7 @@
              (let ((sym (gram-sym-symbol (car gs/action)))
                    (act (cdr gs/action)))
               (cond
+                ((null? act) (void))
                 ((null? (cdr act))
                  (print-entry sym (car act) port))
                 (else
