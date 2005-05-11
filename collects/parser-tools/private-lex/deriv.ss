@@ -160,7 +160,7 @@
       ((null? res) #f)
       ((re-nullable? (caar res)) (cdar res))
       (else (get-final (cdr res)))))
-  (print-struct #t)
+
   (test-block ((c->i char->integer)
                (c (make-cache))
                (r1 (->re #\a c))
