@@ -5,6 +5,7 @@
                      parser-tools/lex
                      (prefix-in : parser-tools/lex-sre)
                      parser-tools/yacc
+                     (submod parser-tools/yacc debug)
                      parser-tools/cfg-parser))
 
 @title{Parser Tools: @exec{lex} and @exec{yacc}-style Parsing}
@@ -762,6 +763,35 @@ actions in the original grammar have nested blocks, the tool will fail.
 
 Annotated examples are in the @filepath{examples} subdirectory of the
 @filepath{parser-tools} collection.}
+
+@; ----------------------------------------------------------------------
+
+@section{Debugging Parsers}
+
+@defmodule[(submod parser-tools/yacc debug)]
+
+This module provides access to an LALR(1) parser's internal state for
+the purpose of debugging. The exports of this module may change if the
+underlying implementation changes.
+
+@history[#:added "1.1"]
+
+@defproc[(current-parser-stack) (listof stack-frame?)]{
+
+Returns the parsing context. The stack is available only during calls
+to the parser's error handler, not during action routines.
+}
+
+@defstruct[stack-frame
+           ([state exact-nonnegative-integer?]
+            [value any/c]
+            [start-pos (or/c exact-nonnegative-integer? #f)]
+            [end-pos (or/c exact-nonnegative-integer? #f)])]{
+
+Represents a frame in the parser context. The @racket[state] field is
+a state index; to emit the state table to a file, use the
+@racket[(debug _filename)] option of @racket[parser].
+}
 
 @; ----------------------------------------------------------------------
 
