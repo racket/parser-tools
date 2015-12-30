@@ -4,14 +4,17 @@
            "grammar.rkt"
            "table.rkt"
            mzlib/class
-           mzlib/contract)
+           racket/contract)
   (require-for-template mzscheme)
   
   (provide/contract
-   (build-parser ((string? any/c any/c (listof identifier?) (listof identifier?)
-                   (listof identifier?) (union syntax? false/c) syntax?)
-                  . ->* .
-                  (any/c any/c any/c any/c))))
+   (build-parser (-> string? any/c any/c
+                     (listof identifier?)
+                     (listof identifier?)
+                     (listof identifier?)
+                     (or/c syntax? #f)
+                     syntax?
+                     (values any/c any/c any/c any/c))))
   
   ;; fix-check-syntax : (listof identifier?) (listof identifier?) (listof identifier?)
   ;;                    (union syntax? false/c) syntax?) -> syntax?

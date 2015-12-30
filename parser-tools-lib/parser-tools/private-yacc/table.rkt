@@ -6,13 +6,14 @@
            "lr0.rkt"
            "lalr.rkt"
            "parser-actions.rkt"
-           mzlib/contract
+           racket/contract
            mzlib/list
            mzlib/class)
 
+  (define (is-a-grammar%? x) (is-a? x grammar%))
   (provide/contract 
-   (build-table ((is-a?/c grammar%) string? any/c . -> .
-                 (vectorof (listof (cons/c (union term? non-term?) action?))))))
+   (build-table (-> is-a-grammar%? string? any/c
+                    (vectorof (listof (cons/c (or/c term? non-term?) action?))))))
 
   ;; A parse-table is (vectorof (listof (cons/c gram-sym? action)))
   ;; A grouped-parse-table is (vectorof (listof (cons/c gram-sym? (listof action))))

@@ -6,7 +6,7 @@
   (require mzlib/class
            mzlib/list
            "yacc-helper.rkt"
-           mzlib/contract)
+           racket/contract)
   
   ;; Each production has a unique index 0 <= index <= number of productions
   (define-struct prod (lhs rhs index prec action) (make-inspector))
@@ -26,12 +26,12 @@
   (define-struct prec (num assoc) (make-inspector))
   
   (provide/contract
-   (make-item (prod? (union false/c natural-number/c) . -> . item?))
-   (make-term (symbol? (union false/c natural-number/c) (union prec? false/c) . -> . term?))
-   (make-non-term (symbol? (union false/c natural-number/c) . -> . non-term?))
-   (make-prec (natural-number/c (symbols 'left 'right 'nonassoc) . -> . prec?))
-   (make-prod (non-term? (vectorof (union non-term? term?))
-               (union false/c natural-number/c) (union false/c prec?) syntax? . -> . prod?)))
+   (make-item (prod? (or/c #f natural-number/c) . -> . item?))
+   (make-term (symbol? (or/c #f natural-number/c) (or/c prec? #f) . -> . term?))
+   (make-non-term (symbol? (or/c #f natural-number/c) . -> . non-term?))
+   (make-prec (natural-number/c (or/c 'left 'right 'nonassoc) . -> . prec?))
+   (make-prod (non-term? (vectorof (or/c non-term? term?))
+               (or/c #f natural-number/c) (or/c #f prec?) syntax? . -> . prod?)))
   
   (provide 
      

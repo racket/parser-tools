@@ -7,13 +7,13 @@
            "../private-lex/token-syntax.rkt"
            "grammar.rkt"
            mzlib/class
-           mzlib/contract)
+           racket/contract)
   (require-for-template mzscheme)
   
-
+(define (is-a-grammar%? x) (is-a? x grammar%))
   (provide/contract 
    (parse-input ((listof identifier?) (listof identifier?) (listof identifier?)
-                 (union false/c syntax?) syntax? any/c . -> . (is-a?/c grammar%)))
+                 (or/c #f syntax?) syntax? any/c . -> . is-a-grammar%?))
    (get-term-list ((listof identifier?) . -> . (listof identifier?))))
 
   (define stx-for-original-property (read-syntax #f (open-input-string "original")))
