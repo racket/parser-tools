@@ -279,7 +279,7 @@ error.}
 @defparam[file-path source any/c]{
 
  A parameter that the lexer uses as the source location if it
- raises a @racket[exn:fail:rad] error.  Setting this parameter allows
+ raises a @racket[exn:fail:read] error.  Setting this parameter allows
  DrRacket, for example, to open the file containing the error.}
 
 
