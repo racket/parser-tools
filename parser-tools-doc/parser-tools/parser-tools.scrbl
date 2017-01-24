@@ -273,7 +273,7 @@ error.}
                            [start-pos position?]
                            [end-pos position?])]{
 
-   Lexers created with @racket[src-pos-lexers] return instances of @racket[position-token].}
+   Lexers created with @racket[lexer-src-pos] return instances of @racket[position-token].}
 
 
 @defparam[file-path source any/c]{
