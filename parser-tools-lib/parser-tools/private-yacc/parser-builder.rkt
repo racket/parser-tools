@@ -8,7 +8,7 @@
   (require-for-template mzscheme)
   
   (provide/contract
-   (build-parser (-> string? any/c any/c
+   (build-parser (-> string? any/c any/c any/c any/c
                      (listof identifier?)
                      (listof identifier?)
                      (listof identifier?)
@@ -74,9 +74,22 @@
             (let ((bind void) ... (tmp void) ...)
               (void bound ... ... term-group ... start ... end ... prec ...))))))
   (require mzlib/list "parser-actions.rkt")
-  (define (build-parser filename src-pos suppress input-terms start end assocs prods)
+  (define (build-parser filename
+                        src-pos
+                        suppress
+                        expected-SR-conflicts
+                        expected-RR-conflicts
+                        input-terms
+                        start
+                        end
+                        assocs
+                        prods)
     (let* ((grammar (parse-input input-terms start end assocs prods src-pos))
-           (table (build-table grammar filename suppress))
+           (table (build-table grammar
+                               filename
+                               suppress
+                               expected-SR-conflicts
+                               expected-RR-conflicts))
            (all-tokens (make-hash-table))
            (actions-code
             `(vector ,@(map prod-action (send grammar get-prods)))))

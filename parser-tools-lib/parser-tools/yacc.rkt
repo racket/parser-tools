@@ -42,12 +42,16 @@
              (end #f)
              (precs #f)
              (suppress #f)
+             (expected-SR-conflicts #f)
+             (expected-RR-conflicts #f)
              (grammar #f)
              (yacc-output #f))
          (for-each
           (lambda (arg)
             (syntax-case* arg (debug error tokens start end precs grammar
-                               suppress src-pos yacc-output)
+                               suppress src-pos yacc-output
+                               expected-SR-conflicts
+                               expected-RR-conflicts)
               (lambda (a b)
                 (eq? (syntax-e a) (syntax-e b)))
               ((debug filename)
@@ -64,6 +68,10 @@
                   (set! debug (syntax-e (syntax filename))))))
               ((suppress)
                (set! suppress #t))
+              ((expected-SR-conflicts n)
+               (set! expected-SR-conflicts (syntax-e (syntax n))))
+              ((expected-RR-conflicts n)
+               (set! expected-RR-conflicts (syntax-e (syntax n))))
               ((src-pos)
                (set! src-pos #t))
               ((error expression)
@@ -164,6 +172,8 @@
                        (build-parser (if debug debug "")
                                      src-pos
                                      suppress
+                                     expected-SR-conflicts
+                                     expected-RR-conflicts
                                      tokens
                                      start
                                      end
