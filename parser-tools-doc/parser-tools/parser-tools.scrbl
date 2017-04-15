@@ -495,7 +495,8 @@ be the right choice when using @racket[lexer] in other situations.
 @defmodule[parser-tools/yacc]
 
 @defform/subs[#:literals (grammar tokens start end precs src-pos
-                          suppress debug yacc-output prec)
+                          suppress expected-SR-conflicts expected-RR-conflicts
+                          debug yacc-output prec)
               (parser clause ...)
               ([clause (grammar (non-terminal-id 
                                  ((grammar-id ...) maybe-prec expr)
@@ -508,6 +509,8 @@ be the right choice when using @racket[lexer] in other situations.
                        (precs (assoc token-id ...) ...)
                        (src-pos)
                        (suppress)
+                       (expected-SR-conflicts num)
+                       (expected-RR-conflicts num)
                        (debug filename)
                        (yacc-output filename)]
                [maybe-prec code:blank
@@ -656,6 +659,18 @@ be the right choice when using @racket[lexer] in other situations.
       Causes the parser generator not to report shift/reduce or
       reduce/reduce conflicts.}
 
+      @item{@racket[(expected-SR-conflicts _n)] @italic{OPTIONAL}
+
+      Causes the parser generator to expect exactly @racket[_num]
+      shift/reduce conflicts, where @racket[_num] must be a literal number.
+      The @racket[suppress] option overrides this option.}
+
+      @item{@racket[(expected-RR-conflicts _n)] @italic{OPTIONAL}
+
+      Causes the parser generator to expect exactly @racket[_num]
+      reduce/reduce conflicts, where @racket[_num] must be a literal number.
+      The @racket[suppress] option overrides this option.}
+
     ]
 
     The result of a @racket[parser] expression with one @racket[start]
@@ -696,7 +711,8 @@ library provides a parser generator that is an alternative to that of
 @racketmodname[parser-tools/yacc].}
 
 @defform/subs[#:literals (grammar tokens start end precs src-pos
-                          suppress debug yacc-output prec)
+                          suppress expected-SR-conflicts expected-RR-conflicts
+                          debug yacc-output prec)
               (cfg-parser clause ...)
               ([clause (grammar (non-terminal-id 
                                  ((grammar-id ...) maybe-prec expr)
@@ -721,8 +737,9 @@ library provides a parser generator that is an alternative to that of
       a single non-terminal-id.}
                        
       @item{The @racket[cfg-parser] form does not support the @racket[precs], 
-             @racket[suppress], @racket[debug], or @racket[yacc-output]
-             options of @racket[parser].}
+             @racket[suppress], @racket[expected-SR-conflicts],
+             @racket[expected-RR-conflicts], @racket[debug],
+             or @racket[yacc-output] options of @racket[parser].}
    ]
 }                                            
                                             
