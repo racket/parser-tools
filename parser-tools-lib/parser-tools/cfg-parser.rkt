@@ -731,7 +731,7 @@
                                       src-pos?
                                       (cons (car clauses) parser-clauses))]))))])
          #`(let ([orig-parse (parser 
-                              [error (lambda (a b c)
+                              [error (lambda (a b c . ignored)
                                        (error 'cfg-parser "unexpected ~a token: ~a" b c))]
                               . #,parser-clauses)]
                  [error-proc #,cfg-error])
@@ -906,10 +906,15 @@
                   (list (position-token 
                          (token-ZERO "zero")
                          (position 2 2 5) 
-                         (position 3 2 6))))))))
+                         (position 3 2 6)))))))
 
    
-  
+   (check-exn #px"unexpected BOGUS token: #f"
+              (λ ()(parse (sequence->tokenizer
+                           (list (position-token
+                                  'BOGUS
+                                  (position 2 2 5)
+                                  (position 3 2 6))))))))
   
   
   ;; Tests used during development
