@@ -7,6 +7,7 @@
                       syntax/stx
                       syntax/define
                       syntax/boundmap
+                      syntax/parse
                       "private-lex/util.rkt"
                       "private-lex/actions.rkt"
                       "private-lex/front.rkt"
@@ -53,8 +54,13 @@
         
   (define-for-syntax (make-lexer-trans src-pos?)
     (lambda (stx)
-      (syntax-case stx ()
-        ((_ re-act ...)
+      (define-splicing-syntax-class maybe-suppress-warnings
+        (pattern (~seq #:suppress-warnings)
+                 #:attr suppress? #t)
+        (pattern (~seq)
+                 #:attr suppress? #f))
+      (syntax-parse stx
+        ((_ suppress:maybe-suppress-warnings re-act ...)
          (begin
            (for-each
             (lambda (x)
@@ -97,12 +103,12 @@
                (raise-syntax-error (if src-pos? 'lexer/src-pos 'lexer) "expected at least one action" stx))
              (let-values (((trans start action-names no-look disappeared-uses)
                            (build-lexer re-actname-lst)))
-               (when (vector-ref action-names start) ;; Start state is final
-                 (unless (and 
+               (when (and (not (attribute suppress.suppress?))
+                          (vector-ref action-names start)) ;; Start state is final
+                 (unless (and
                           ;; All the successor states are final
                           (andmap (lambda (x) (vector-ref action-names (vector-ref x 2)))
                                       (vector->list (vector-ref trans start)))
-                          ;; Each character has a successor state
                           (let loop ((check 0)
                                      (nexts (vector->list (vector-ref trans start))))
                             (cond
