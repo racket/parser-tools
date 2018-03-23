@@ -489,6 +489,12 @@
                                                 (fail-k max-depth tasks))))])
                  (k end max-depth tasks new-got-k new-fail-k)))])))))
 
+;; These temp identifiers can't be `gensym` or `generate-temporary`
+;; because they have to be consistent between module loads
+;; (IIUC, the parser is multi-threaded, and this approach is not thread-safe)
+;; so I see no alternative to the old standby of making them ludicrously unlikely
+(define-for-syntax start-id-temp 'start_jihqolbbafscgxvsufnepvmxqipnxgmlpxukmdoqxqzmzgaogaftbkbyqjttwwfimifowdxfyekjiixdmtprfkcvfciraehoeuaz)
+(define-for-syntax atok-id-temp 'atok_wrutdjgecmybyfipiwsgjlvsveryodlgassuzcargiuznzgdghrykfqfbwcjgzdhdoeqxcucmtjkuyucskzethozhqkasphdwbht)
 (define-syntax (cfg-parser stx)
   (syntax-case stx ()
     [(_ clause ...)
@@ -704,11 +710,17 @@
                                                        [(pos ...) 
                                                         (if src-pos?
                                                             #'($1-start-pos $1-end-pos)
-                                                            #'(#f #f))])
-                                           #`(grammar (start [() null]
-                                                             [(atok start) (cons $1 $2)])
-                                                      (atok [(tok) (make-tok 'tok-id 'tok $e pos ...)] ...)))
-                                         #`(start start)
+                                                            #'(#f #f))]
+                                                       ;; rename `start` and `atok` to temp ids
+                                                       ;; so that "start" and "atok" can be used as literal string tokens in a grammar.
+                                                       ;; not sure why this works, but it passes all tests.
+                                                       [%start start-id-temp]
+                                                       [%atok atok-id-temp])
+                                           #`(grammar (%start [() null]
+                                                              [(%atok %start) (cons $1 $2)])
+                                                      (%atok [(tok) (make-tok 'tok-id 'tok $e pos ...)] ...)))
+                                         (with-syntax ([%start start-id-temp])
+                                           #`(start %start))
                                          parser-clauses)))]
                                [(grammar . _)
                                 (raise-syntax-error
@@ -751,30 +763,30 @@
                                          [else
                                           (error-proc tok-ok? tok-name tok-value)]))
                                       (cond
-                                       [(null? tok-list)
-                                        (if error-proc
+                                        [(null? tok-list)
+                                         (if error-proc
                                             (call-error-proc #t
-                                                             'no-tokens
-                                                             #f
-                                                             (make-position #f #f #f)
-                                                             (make-position #f #f #f))
-                                            (error
-                                             'cfg-parse
-                                             "no tokens"))]
-                                       [else
-                                        (let ([bad-tok (list-ref tok-list 
-                                                                 (min (sub1 (length tok-list))
-                                                                      max-depth))])
-                                          (if error-proc
+                                                         'no-tokens
+                                                         #f
+                                                         (make-position #f #f #f)
+                                                         (make-position #f #f #f))
+                                             (error
+                                              'cfg-parse
+                                              "no tokens"))]
+                                        [else
+                                         (let ([bad-tok (list-ref tok-list 
+                                                                  (min (sub1 (length tok-list))
+                                                                       max-depth))])
+                                           (if error-proc
                                               (call-error-proc #t
-                                                               (tok-orig-name bad-tok)
-                                                               (tok-val bad-tok)
-                                                               (tok-start bad-tok)
-                                                               (tok-end bad-tok))
-                                              (error
-                                               'cfg-parse
-                                               "failed at ~a" 
-                                               (tok-val bad-tok))))]))])
+                                                           (tok-orig-name bad-tok)
+                                                           (tok-val bad-tok)
+                                                           (tok-start bad-tok)
+                                                           (tok-end bad-tok))
+                                               (error
+                                                'cfg-parse
+                                                "failed at ~a" 
+                                                (tok-val bad-tok))))]))])
                      (#,start tok-list
                               ;; we simulate a token at the very beginning with zero width
                               ;; for use with the position-generating code (*-start-pos, *-end-pos).
