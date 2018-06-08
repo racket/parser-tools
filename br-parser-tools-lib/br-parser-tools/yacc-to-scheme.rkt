@@ -1,7 +1,7 @@
 (module yacc-to-scheme mzscheme
-  (require parser-tools/lex
-           (prefix : parser-tools/lex-sre)
-           parser-tools/yacc
+  (require br-parser-tools/lex
+           (prefix : br-parser-tools/lex-sre)
+           br-parser-tools/yacc
            syntax/readerr
            mzlib/list)
   (provide trans)

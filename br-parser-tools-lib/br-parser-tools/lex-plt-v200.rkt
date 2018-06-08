@@ -1,6 +1,6 @@
 (module lex-plt-v200 mzscheme
-  (require parser-tools/lex
-           (prefix : parser-tools/lex-sre))
+  (require br-parser-tools/lex
+           (prefix : br-parser-tools/lex-sre))
   
   (provide epsilon
            ~
