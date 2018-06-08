@@ -4,9 +4,9 @@
 
 
 ;; Import the parser and lexer generators.
-(require parser-tools/yacc
-         parser-tools/lex
-         (prefix-in : parser-tools/lex-sre))
+(require br-parser-tools/yacc
+         br-parser-tools/lex
+         (prefix-in : br-parser-tools/lex-sre))
 
 (define-tokens value-tokens (NUM VAR FNCT))
 (define-empty-tokens op-tokens (newline = OP CP + - * / ^ EOF NEG))

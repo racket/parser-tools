@@ -5,10 +5,10 @@
 (define build-deps '("scheme-lib"
                      "racket-doc"
                      "syntax-color-doc"
-                     "parser-tools-lib"
+                     "br-parser-tools-lib"
                      "scribble-lib"))
-(define update-implies '("parser-tools-lib"))
+(define update-implies '("br-parser-tools-lib"))
 
-(define pkg-desc "documentation part of \"parser-tools\"")
+(define pkg-desc "documentation part of \"br-parser-tools\"")
 
 (define pkg-authors '(mflatt))
