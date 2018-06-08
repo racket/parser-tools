@@ -12,7 +12,7 @@
 
   (define (is-a-grammar%? x) (is-a? x grammar%))
   (provide/contract 
-   (build-table (-> is-a-grammar%? string? any/c any/c any/c
+   (build-table (-> is-a-grammar%? string? any/c
                     (vectorof (listof (cons/c (or/c term? non-term?) action?))))))
 
   ;; A parse-table is (vectorof (listof (cons/c gram-sym? action)))
@@ -164,10 +164,7 @@
              (else (loop current-guess (cdr rest)))))))))
   
   ;; resolve-conflicts : grouped-parse-table bool -> parse-table
-  (define (resolve-conflicts grouped-table
-                             suppress
-                             expected-SR-conflicts
-                             expected-RR-conflicts)
+  (define (resolve-conflicts grouped-table suppress)
     (let* ((SR-conflicts 0)
            (RR-conflicts 0)
            (table (table-map
@@ -181,24 +178,14 @@
                        action))
                    grouped-table)))
       (unless suppress
-        (when (if expected-SR-conflicts
-                  (not (= SR-conflicts expected-SR-conflicts))
-                  (> SR-conflicts 0))
-          (eprintf "~a shift/reduce conflict~a~a\n"
+        (when (> SR-conflicts 0)
+          (eprintf "~a shift/reduce conflict~a\n"
                    SR-conflicts
-                   (if (= SR-conflicts 1) "" "s")
-                   (if expected-SR-conflicts
-                       (format ", expected ~a" expected-SR-conflicts)
-                       "")))
-        (when (if expected-RR-conflicts
-                  (not (= RR-conflicts expected-RR-conflicts))
-                  (> RR-conflicts 0))
-          (eprintf "~a reduce/reduce conflict~a~a\n"
+                   (if (= SR-conflicts 1) "" "s")))
+        (when (> RR-conflicts 0)
+          (eprintf "~a reduce/reduce conflict~a\n"
                    RR-conflicts
-                   (if (= RR-conflicts 1) "" "s")
-                   (if expected-RR-conflicts
-                       (format ", expected ~a" expected-RR-conflicts)
-                       ""))))
+                   (if (= RR-conflicts 1) "" "s"))))
       table))
   
 
@@ -240,12 +227,8 @@
          (else actions)))
      (group-table table)))
                         
-  ;; build-table: grammar string bool #f|int #f|int -> parse-table
-  (define (build-table g
-                       file
-                       suppress
-                       expected-SR-conflicts
-                       expected-RR-conflicts)
+  ;; build-table: grammar string bool -> parse-table
+  (define (build-table g file suppress)
     (let* ((a (build-lr0-automaton g))
            (term-vector (list->vector (send g get-terms)))
            (end-terms (send g get-end-terms))
@@ -304,7 +287,4 @@
               (lambda (port)
                 (display-parser a grouped-table (send g get-prods) port))
               #:exists 'truncate)))
-        (resolve-conflicts grouped-table
-                           suppress
-                           expected-SR-conflicts
-                           expected-RR-conflicts))))
+        (resolve-conflicts grouped-table suppress))))

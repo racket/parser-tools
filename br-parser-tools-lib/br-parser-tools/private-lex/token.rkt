@@ -10,7 +10,8 @@
            (rename token-name* token-name)
            (rename token-value* token-value)
            (struct position (offset line col))
-           (struct position-token (token start-pos end-pos)))
+           (struct position-token (token start-pos end-pos))
+           (struct srcloc-token (token srcloc)))
 
   
   ;; A token is either
@@ -85,5 +86,7 @@
 
   (define-struct position (offset line col) #f)
   (define-struct position-token (token start-pos end-pos) #f)
+
+  (define-struct srcloc-token (token srcloc) #f)
   )
 

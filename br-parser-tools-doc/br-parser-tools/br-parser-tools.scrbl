@@ -2,14 +2,14 @@
 @(require scribble/manual scribble/struct scribble/xref scribble/bnf
           (for-label scheme/base
                      scheme/contract
-                     parser-tools/lex
-                     (prefix-in : parser-tools/lex-sre)
-                     parser-tools/yacc
-                     parser-tools/cfg-parser))
+                     br-parser-tools/lex
+                     (prefix-in : br-parser-tools/lex-sre)
+                     br-parser-tools/yacc
+                     br-parser-tools/cfg-parser))
 
-@title{Parser Tools: @exec{lex} and @exec{yacc}-style Parsing}
+@title{Parser Tools: @exec{lex} and @exec{yacc}-style Parsing (Beautiful Racket edition)}
 
-@author["Scott Owens"]
+@author["Scott Owens (99%)" "Matthew Butterick (1%)"]
 
 This documentation assumes familiarity with @exec{lex} and @exec{yacc}
 style lexer and parser generators.
@@ -24,7 +24,7 @@ style lexer and parser generators.
 @section-index["scanning"]
 @section-index["scanner"]
 
-@defmodule[parser-tools/lex]
+@defmodule[br-parser-tools/lex]
 
 @; ----------------------------------------
 
@@ -59,7 +59,7 @@ style lexer and parser generators.
      @margin-note{The implementation of @racketmodname[syntax-color/racket-lexer]
                  contains a lexer for the @racketmodname[racket] language.
                  In addition, files in the @filepath{examples} sub-directory
-                 of the @filepath{parser-tools} collection contain
+                 of the @filepath{br-parser-tools} collection contain
                  simpler example lexers.}
 
      An @racket[re] is matched as follows:
@@ -67,7 +67,7 @@ style lexer and parser generators.
    @itemize[
     @item{@racket[id] --- expands to the named @deftech{lexer abbreviation};
           abbreviations are defined via @racket[define-lex-abbrev] or supplied by modules
-          like @racketmodname[parser-tools/lex-sre].}
+          like @racketmodname[br-parser-tools/lex-sre].}
     @item{@racket[string] --- matches the sequence of characters in @racket[string].}
     @item{@racket[character] --- matches a literal @racket[character].}
     @item{@racket[(repetition lo hi re)] --- matches @racket[re] repeated between @racket[lo]
@@ -92,15 +92,15 @@ empty string, @racket[(union)] matches nothing,
 The regular expression language is not designed to be used directly,
 but rather as a basis for a user-friendly notation written with
 regular expression macros.  For example,
-@racketmodname[parser-tools/lex-sre] supplies operators from Olin
-Shivers's SREs, and @racketmodname[parser-tools/lex-plt-v200] supplies
+@racketmodname[br-parser-tools/lex-sre] supplies operators from Olin
+Shivers's SREs, and @racketmodname[br-parser-tools/lex-plt-v200] supplies
 (deprecated) operators from the previous version of this library.
 Since those libraries provide operators whose names match other Racket
 bindings, such as @racket[*] and @racket[+], they normally must be
 imported using a prefix:
 
 @racketblock[
-(require (prefix-in : parser-tools/lex-sre))
+(require (prefix-in : br-parser-tools/lex-sre))
 ]
 
 The suggested prefix is @racket[:], so that @racket[:*] and
@@ -167,14 +167,14 @@ are a few examples, using @racket[:] prefixed SRE syntax:
        @item{@racket[input-port] --- the input-port being
             processed (this is useful for matching input with multiple
             lexers).}
-       @item{@racket[(return-without-pos x)] is a function (continuation) that
-	immediately returns the value of @racket[x] from the lexer.  This useful
-	in a src-pos lexer to prevent the lexer from adding source
+       @item{@racket[(return-without-pos x)] and @racket[(return-without-srcloc x)] are functions (continuations) that
+	immediately return the value of @racket[x] from the lexer.  This useful
+	in a src-pos or src-loc lexer to prevent the lexer from adding source
 	information.  For example:
 
 	@racketblock[
 	(define get-token
-	  (lexer-src-pos
+	  (lexer-srcloc
 	  ...
 	  ((comment) (get-token input-port))
 	  ...))
@@ -182,12 +182,12 @@ are a few examples, using @racket[:] prefixed SRE syntax:
 
 	would wrap the source location information for the comment around
 	the value of the recursive call.  Using
-	@racket[((comment) (return-without-pos (get-token input-port)))] 
+	@racket[((comment) (return-without-srcloc (get-token input-port)))] 
 	will cause the value of the recursive call to be returned without
 	wrapping position around it.}
      ]
 
-     The lexer raises an exception @racket[(exn:read)] if none of the
+     The lexer raises an @racket[exn:fail:read] exception if none of the
      regular expressions match the input.  Hint: If @racket[(any-char
      _custom-error-behavior)] is the last rule, then there will always
      be a match, and @racket[_custom-error-behavior] is executed to
@@ -248,12 +248,21 @@ an @racket[action-expr], returns @racket[(make-position-token
 _action-result start-pos end-pos)] instead of simply
 @racket[_action-result].}
 
+@defform[(lexer-srcloc (trigger action-expr) ...)]{
+
+Like @racket[lexer], but for each @racket[_action-result] produced by
+an @racket[action-expr], returns @racket[(make-srcloc-token
+_action-result lexeme-srcloc)] instead of simply
+@racket[_action-result].}
+
 @deftogether[(
 @defidform[start-pos]
 @defidform[end-pos]
 @defidform[lexeme]
+@defidform[lexeme-srcloc]
 @defidform[input-port]
 @defidform[return-without-pos]
+@defidform[return-without-srcloc]
 )]{
 
 Use of these names outside of a @racket[lexer] action is a syntax
@@ -276,11 +285,20 @@ error.}
    Lexers created with @racket[lexer-src-pos] return instances of @racket[position-token].}
 
 
+@defstruct[srcloc-token ([token any/c]
+                           [srcloc srcloc?])]{
+
+   Lexers created with @racket[lexer-srcloc] return instances of @racket[srcloc-token].}
+
 @defparam[file-path source any/c]{
 
  A parameter that the lexer uses as the source location if it
  raises a @racket[exn:fail:read] error.  Setting this parameter allows
  DrRacket, for example, to open the file containing the error.}
+
+@defparam[lexer-file-path source any/c]{
+                                        
+Alias for @racket[file-path].}
 
 
 @; ----------------------------------------
@@ -340,14 +358,14 @@ characters, @racket[char-lower-case?] characters, etc.}
 
 @subsection{Lexer SRE Operators}
 
-@defmodule[parser-tools/lex-sre]
+@defmodule[br-parser-tools/lex-sre]
 
 @; Put the docs in a macro, so that we can bound the scope of
 @; the import of `*', etc.:
 @(define-syntax-rule (lex-sre-doc)
    (...
     (begin
-      (require (for-label parser-tools/lex-sre))
+      (require (for-label br-parser-tools/lex-sre))
 
 @defform[(* re ...)]{
 
@@ -416,16 +434,16 @@ characters.}
 
 @subsection{Lexer Legacy Operators}
 
-@defmodule[parser-tools/lex-plt-v200]
+@defmodule[br-parser-tools/lex-plt-v200]
 
 @(define-syntax-rule (lex-v200-doc)
    (...
     (begin
-      (require (for-label parser-tools/lex-plt-v200))
+      (require (for-label br-parser-tools/lex-plt-v200))
 
-@t{The @racketmodname[parser-tools/lex-plt-v200] module re-exports
+@t{The @racketmodname[br-parser-tools/lex-plt-v200] module re-exports
    @racket[*], @racket[+], @racket[?], and @racket[&] from
-   @racketmodname[parser-tools/lex-sre]. It also re-exports
+   @racketmodname[br-parser-tools/lex-sre]. It also re-exports
    @racket[:or] as @racket[:], @racket[::] as @racket[|@|], @racket[:~]
    as @racket[^], and @racket[:/] as @racket[-].}
 
@@ -446,7 +464,7 @@ The same as @racket[(complement re ...)].})))
 Each @racket[_action-expr] in a @racket[lexer] form can produce any
 kind of value, but for many purposes, producing a @deftech{token}
 value is useful. Tokens are usually necessary for inter-operating with
-a parser generated by @racket[parser-tools/parser], but tokens may not
+a parser generated by @racket[br-parser-tools/parser], but tokens may not
 be the right choice when using @racket[lexer] in other situations.
 
 @defform[(define-tokens group-id (token-id ...))]{
@@ -492,11 +510,10 @@ be the right choice when using @racket[lexer] in other situations.
 
 @section-index["yacc"]
 
-@defmodule[parser-tools/yacc]
+@defmodule[br-parser-tools/yacc]
 
 @defform/subs[#:literals (grammar tokens start end precs src-pos
-                          suppress expected-SR-conflicts expected-RR-conflicts
-                          debug yacc-output prec)
+                          suppress debug yacc-output prec)
               (parser clause ...)
               ([clause (grammar (non-terminal-id 
                                  ((grammar-id ...) maybe-prec expr)
@@ -509,8 +526,6 @@ be the right choice when using @racket[lexer] in other situations.
                        (precs (assoc token-id ...) ...)
                        (src-pos)
                        (suppress)
-                       (expected-SR-conflicts num)
-                       (expected-RR-conflicts num)
                        (debug filename)
                        (yacc-output filename)]
                [maybe-prec code:blank
@@ -659,18 +674,6 @@ be the right choice when using @racket[lexer] in other situations.
       Causes the parser generator not to report shift/reduce or
       reduce/reduce conflicts.}
 
-      @item{@racket[(expected-SR-conflicts _n)] @italic{OPTIONAL}
-
-      Causes the parser generator to expect exactly @racket[_num]
-      shift/reduce conflicts, where @racket[_num] must be a literal number.
-      The @racket[suppress] option overrides this option.}
-
-      @item{@racket[(expected-RR-conflicts _n)] @italic{OPTIONAL}
-
-      Causes the parser generator to expect exactly @racket[_num]
-      reduce/reduce conflicts, where @racket[_num] must be a literal number.
-      The @racket[suppress] option overrides this option.}
-
     ]
 
     The result of a @racket[parser] expression with one @racket[start]
@@ -706,13 +709,12 @@ be the right choice when using @racket[lexer] in other situations.
 
 @section-index["cfg-parser"]
 
-@defmodule[parser-tools/cfg-parser]{The @racketmodname[parser-tools/cfg-parser]
+@defmodule[br-parser-tools/cfg-parser]{The @racketmodname[br-parser-tools/cfg-parser]
 library provides a parser generator that is an alternative to that of 
-@racketmodname[parser-tools/yacc].}
+@racketmodname[br-parser-tools/yacc].}
 
 @defform/subs[#:literals (grammar tokens start end precs src-pos
-                          suppress expected-SR-conflicts expected-RR-conflicts
-                          debug yacc-output prec)
+                          suppress debug yacc-output prec)
               (cfg-parser clause ...)
               ([clause (grammar (non-terminal-id 
                                  ((grammar-id ...) maybe-prec expr)
@@ -726,7 +728,7 @@ library provides a parser generator that is an alternative to that of
 
     Creates a parser similar to that of @racket[parser].  Unlike @racket[parser],
     @racket[cfg-parser], can consume arbitrary and potentially ambiguous context-free
-    grammars. Its interface is a subset of @racketmodname[parser-tools/yacc], with
+    grammars. Its interface is a subset of @racketmodname[br-parser-tools/yacc], with
     the following differences:
                                         
     @itemize[
@@ -737,9 +739,8 @@ library provides a parser generator that is an alternative to that of
       a single non-terminal-id.}
                        
       @item{The @racket[cfg-parser] form does not support the @racket[precs], 
-             @racket[suppress], @racket[expected-SR-conflicts],
-             @racket[expected-RR-conflicts], @racket[debug],
-             or @racket[yacc-output] options of @racket[parser].}
+             @racket[suppress], @racket[debug], or @racket[yacc-output]
+             options of @racket[parser].}
    ]
 }                                            
                                             
@@ -747,7 +748,7 @@ library provides a parser generator that is an alternative to that of
 
 @section{Converting @exec{yacc} or @exec{bison} Grammars}
 
-@defmodule[parser-tools/yacc-to-scheme]
+@defmodule[br-parser-tools/yacc-to-scheme]
 
 @defproc[(trans [file path-string?]) any/c]{
 
@@ -761,7 +762,7 @@ conversion tool.  It is not entirely robust.  For example, if the C
 actions in the original grammar have nested blocks, the tool will fail.
 
 Annotated examples are in the @filepath{examples} subdirectory of the
-@filepath{parser-tools} collection.}
+@filepath{br-parser-tools} collection.}
 
 @; ----------------------------------------------------------------------
 

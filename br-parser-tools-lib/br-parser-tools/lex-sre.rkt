@@ -1,5 +1,5 @@
 (module lex-sre mzscheme
-  (require parser-tools/lex)
+  (require br-parser-tools/lex)
     
   (provide (rename sre-* *)
            (rename sre-+ +)
