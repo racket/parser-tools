@@ -369,30 +369,30 @@ characters, @racket[char-lower-case?] characters, etc.}
 
 @defform[(* re ...)]{
 
-Repetition of @racket[re] sequence 0 or more times.}
+0 or more occurrences of any @racket[re] pattern.}
 
 @defform[(+ re ...)]{
 
-Repetition of @racket[re] sequence 1 or more times.}
+1 or more occurrences of any @racket[re] pattern.}
 
 @defform[(? re ...)]{
 
-Zero or one occurrence of @racket[re] sequence.}
+0 or 1 occurrence of any @racket[re] pattern.}
 
 @defform[(= n re ...)]{
 
-Exactly @racket[n] occurrences of @racket[re] sequence, where
+Exactly @racket[n] occurrences of any @racket[re] pattern, where
 @racket[n] must be a literal exact, non-negative number.}
 
 @defform[(>= n re ...)]{
 
-At least @racket[n] occurrences of @racket[re] sequence, where
+At least @racket[n] occurrences of any @racket[re] pattern, where
 @racket[n] must be a literal exact, non-negative number.}
 
 @defform[(** n m re ...)]{
 
 Between @racket[n] and @racket[m] (inclusive) occurrences of
-@racket[re] sequence, where @racket[n] must be a literal exact,
+any @racket[re] pattern, where @racket[n] must be a literal exact,
 non-negative number, and @racket[m] must be literally either
 @racket[#f], @racket[+inf.0], or an exact, non-negative number; a
 @racket[#f] value for @racket[m] is the same as @racket[+inf.0].}
@@ -406,7 +406,8 @@ Same as @racket[(union re ...)].}
 @defform[(seq re ...)]
 )]{
 
-Both forms concatenate the @racket[re]s.}
+Both forms concatenate the @racket[re]s into a single, indivisible pattern.
+In other words, this matches @emph{all} the @racket[re]s in order, whereas @racket[(union re ...)] matches @emph{any} of the @racket[re]s.}
 
 @defform[(& re ...)]{
 
