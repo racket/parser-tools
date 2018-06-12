@@ -7,12 +7,14 @@
                      br-parser-tools/yacc
                      br-parser-tools/cfg-parser))
 
-@title{Parser Tools: @exec{lex} and @exec{yacc}-style Parsing (Beautiful Racket edition)}
+@title{Parser Tools: @exec{lex} and @exec{yacc}-style Parsing (BR edition)}
 
 @author["Scott Owens (99%)" "Matthew Butterick (1%)"]
 
-This documentation assumes familiarity with @exec{lex} and @exec{yacc}
-style lexer and parser generators.
+This documentation assumes familiarity with @exec{lex}- and @exec{yacc}-style lexer and parser generators.
+
+@margin-note{This is a fork of the @link["https://docs.racket-lang.org/parser-tools"]{@racket[parser-tools]} package. It has a variety of small improvements and bugfixes designed to support the @link["https://docs.racket-lang.org/brag"]{@racket[brag]} parser language, in particular the @racket[srcloc] structure type (e.g., @racket[lexer-srcloc]). But the core lexing and parsing engines are identical.}
+
 
 @table-of-contents[]
 
