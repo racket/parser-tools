@@ -80,7 +80,10 @@
            (syntax-case x ()
              [(RE ACT) #t]
              [else (raise-syntax-error caller "not a regular expression / action pair" stx x)]))
-         (define eof-act (get-special-action spec/re-acts #'eof #'eof))
+         (define eof-act (get-special-action spec/re-acts #'eof (case src-loc-style
+                                                                  [(lexer-src-pos) #'(return-without-pos eof)]
+                                                                  [(lexer-srcloc) #'(return-without-srcloc eof)]
+                                                                  [else #'eof])))
          (define spec-act (get-special-action spec/re-acts #'special #'(void)))
          (define spec-comment-act (get-special-action spec/re-acts #'special-comment #'#f))
          (define ids (list #'special #'special-comment #'eof))
