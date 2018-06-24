@@ -47,18 +47,16 @@
 (define-struct tasks (active active-back waits multi-waits cache progress?))
 
 (define-for-syntax make-token-identifier-mapping make-hasheq)
-(define-for-syntax token-identifier-mapping-get
-  (case-lambda 
-    [(t tok)
-     (hash-ref t (syntax-e tok))]
-    [(t tok fail)
-     (hash-ref t (syntax-e tok) fail)]))
-(define-for-syntax token-identifier-mapping-put!
-  (lambda (t tok v)
-    (hash-set! t (syntax-e tok) v)))
-(define-for-syntax token-identifier-mapping-map
-  (lambda (t f)
-    (hash-map t f)))
+(define-for-syntax (token-identifier-mapping-get t tok [fail #f])
+  (if fail
+      (hash-ref t (syntax-e tok) fail)
+      (hash-ref t (syntax-e tok))))
+
+(define-for-syntax (token-identifier-mapping-put! t tok v)
+  (hash-set! t (syntax-e tok) v))
+
+(define-for-syntax (token-identifier-mapping-map t f)
+  (hash-map t f))
 
 ;; Used to calculate information on the grammar, such as whether
 ;; a particular non-terminal is "simple" instead of recursively defined.
@@ -71,7 +69,7 @@
                        (cdr as) (cdr bs))]))
   (let loop ()
     (when (ormap-all #f
-                     (lambda (nt pats)
+                     (λ (nt pats)
                        (let ([old (bound-identifier-mapping-get nts nt)])
                          (let ([new (proc nt pats old)])
                            (if (equal? old new)
@@ -88,182 +86,153 @@
 (define (parse-and simple-a? parse-a parse-b
                    stream last-consumed-token depth end success-k fail-k 
                    max-depth tasks)
-  (letrec ([mk-got-k
-            (lambda (success-k fail-k)
-              (lambda (val stream last-consumed-token depth max-depth tasks next1-k)
-                (if simple-a?
-                    (parse-b val stream last-consumed-token depth end
-                             (mk-got2-k success-k fail-k next1-k)
-                             (mk-fail2-k success-k fail-k next1-k)
-                             max-depth tasks)
-                    (parallel-or
-                     (lambda (success-k fail-k max-depth tasks)
-                       (parse-b val stream last-consumed-token depth end
-                                success-k fail-k
-                                max-depth tasks))
-                     (lambda (success-k fail-k max-depth tasks)
-                       (next1-k (mk-got-k success-k fail-k)
-                                fail-k max-depth tasks))
-                     success-k fail-k max-depth tasks))))]
-           [mk-got2-k
-            (lambda (success-k fail-k next1-k)
-              (lambda (val stream last-consumed-token depth max-depth tasks next-k)
-                (success-k val stream last-consumed-token depth max-depth tasks
-                           (lambda (success-k fail-k max-depth tasks)
-                             (next-k (mk-got2-k success-k fail-k next1-k)
-                                     (mk-fail2-k success-k fail-k next1-k)
-                                     max-depth tasks)))))]
-           [mk-fail2-k
-            (lambda (success-k fail-k next1-k)
-              (lambda (max-depth tasks)
-                (next1-k (mk-got-k success-k fail-k)
-                         fail-k
-                         max-depth
-                         tasks)))])
-    (parse-a stream last-consumed-token depth end
-             (mk-got-k success-k fail-k)
-             fail-k
-             max-depth tasks)))
+  (define ((mk-got-k success-k fail-k) val stream last-consumed-token depth max-depth tasks next1-k)
+    (if simple-a?
+        (parse-b val stream last-consumed-token depth end
+                 (mk-got2-k success-k fail-k next1-k)
+                 (mk-fail2-k success-k fail-k next1-k)
+                 max-depth tasks)
+        (parallel-or
+         (λ (success-k fail-k max-depth tasks)
+           (parse-b val stream last-consumed-token depth end
+                    success-k fail-k
+                    max-depth tasks))
+         (λ (success-k fail-k max-depth tasks)
+           (next1-k (mk-got-k success-k fail-k)
+                    fail-k max-depth tasks))
+         success-k fail-k max-depth tasks)))
+  
+  (define ((mk-got2-k success-k fail-k next1-k) val stream last-consumed-token depth max-depth tasks next-k)
+    (success-k val stream last-consumed-token depth max-depth tasks
+               (λ (success-k fail-k max-depth tasks)
+                 (next-k (mk-got2-k success-k fail-k next1-k)
+                         (mk-fail2-k success-k fail-k next1-k)
+                         max-depth tasks))))
+  
+  (define ((mk-fail2-k success-k fail-k next1-k) max-depth tasks)
+    (next1-k (mk-got-k success-k fail-k) fail-k max-depth tasks))
+  
+  (parse-a stream last-consumed-token depth end
+           (mk-got-k success-k fail-k)
+           fail-k
+           max-depth tasks))
 
 ;; Parallel or for non-terminal alternatives
 (define (parse-parallel-or parse-a parse-b stream last-consumed-token depth end success-k fail-k max-depth tasks)
-  (parallel-or (lambda (success-k fail-k max-depth tasks)
+  (parallel-or (λ (success-k fail-k max-depth tasks)
                  (parse-a stream last-consumed-token depth end success-k fail-k max-depth tasks))
-               (lambda (success-k fail-k max-depth tasks)
+               (λ (success-k fail-k max-depth tasks)
                  (parse-b stream last-consumed-token depth end success-k fail-k max-depth tasks))
                success-k fail-k max-depth tasks))
 
 ;; Generic parallel-or
 (define (parallel-or parse-a parse-b success-k fail-k max-depth tasks)
   (define answer-key (gensym))
-  (letrec ([gota-k
-            (lambda (val stream last-consumed-token depth max-depth tasks next-k)
-              (report-answer answer-key
-                             max-depth
-                             tasks
-                             (list val stream last-consumed-token depth next-k)))]
-           [faila-k
-            (lambda (max-depth tasks)
-              (report-answer answer-key
-                             max-depth
-                             tasks
-                             null))])
-    (let* ([tasks (queue-task
+  (define (gota-k val stream last-consumed-token depth max-depth tasks next-k)
+    (report-answer answer-key
+                   max-depth
                    tasks
-                   (lambda (max-depth tasks)
-                     (parse-a gota-k
-                              faila-k
-                              max-depth tasks)))]
-           [tasks (queue-task
+                   (list val stream last-consumed-token depth next-k)))
+  (define (faila-k max-depth tasks) 
+    (report-answer answer-key
+                   max-depth
                    tasks
-                   (lambda (max-depth tasks)
-                     (parse-b gota-k
-                              faila-k
-                              max-depth tasks)))]
-           [queue-next (lambda (next-k tasks)
-                         (queue-task tasks
-                                     (lambda (max-depth tasks)
-                                       (next-k gota-k
-                                               faila-k
-                                               max-depth tasks))))])
-      (letrec ([mk-got-one
-                (lambda (immediate-next? get-nth success-k)
-                  (lambda (val stream last-consumed-token depth max-depth tasks next-k)
-                    (let ([tasks (if immediate-next?
-                                     (queue-next next-k tasks)
-                                     tasks)])
-                      (success-k val stream last-consumed-token depth max-depth 
-                                 tasks
-                                 (lambda (success-k fail-k max-depth tasks)                                     
-                                   (let ([tasks (if immediate-next?
-                                                    tasks
-                                                    (queue-next next-k tasks))])
-                                     (get-nth max-depth tasks success-k fail-k)))))))]
-               [get-first
-                (lambda (max-depth tasks success-k fail-k)
-                  (wait-for-answer #f max-depth tasks answer-key
-                                   (mk-got-one #t get-first success-k)
-                                   (lambda (max-depth tasks)
-                                     (get-second max-depth tasks success-k fail-k))
-                                   #f))]
-               [get-second
-                (lambda (max-depth tasks success-k fail-k)
-                  (wait-for-answer #f max-depth tasks answer-key
-                                   (mk-got-one #f get-second success-k)
-                                   fail-k #f))])
-        (get-first max-depth tasks success-k fail-k)))))
+                   null))
+  (let* ([tasks (queue-task tasks (λ (max-depth tasks)
+                                    (parse-a gota-k faila-k max-depth tasks)))]
+         [tasks (queue-task tasks (λ (max-depth tasks)
+                                    (parse-b gota-k faila-k max-depth tasks)))]
+         [queue-next (λ (next-k tasks)
+                       (queue-task tasks (λ (max-depth tasks)
+                                           (next-k gota-k faila-k max-depth tasks))))])
+    (define ((mk-got-one immediate-next? get-nth success-k) val stream last-consumed-token depth max-depth tasks next-k)
+      (let ([tasks (if immediate-next?
+                       (queue-next next-k tasks)
+                       tasks)])
+        (success-k val stream last-consumed-token depth max-depth 
+                   tasks
+                   (λ (success-k fail-k max-depth tasks)                                     
+                     (let ([tasks (if immediate-next?
+                                      tasks
+                                      (queue-next next-k tasks))])
+                       (get-nth max-depth tasks success-k fail-k))))))
+    (define (get-first max-depth tasks success-k fail-k)
+      (wait-for-answer #f max-depth tasks answer-key
+                       (mk-got-one #t get-first success-k)
+                       (λ (max-depth tasks)
+                         (get-second max-depth tasks success-k fail-k))
+                       #f))
+    (define (get-second max-depth tasks success-k fail-k)
+      (wait-for-answer #f max-depth tasks answer-key
+                       (mk-got-one #f get-second success-k)
+                       fail-k #f))
+    (get-first max-depth tasks success-k fail-k)))
 
 ;; Non-terminal alternatives where the first is "simple" can be done
 ;; sequentially, which is simpler
 (define (parse-or parse-a parse-b
                   stream last-consumed-token depth end success-k fail-k max-depth tasks)
-  (letrec ([mk-got-k
-            (lambda (success-k fail-k)
-              (lambda (val stream last-consumed-token depth max-depth tasks next-k)
-                (success-k val stream last-consumed-token depth
-                           max-depth tasks
-                           (lambda (success-k fail-k max-depth tasks)
-                             (next-k (mk-got-k success-k fail-k)
-                                     (mk-fail-k success-k fail-k)
-                                     max-depth tasks)))))]
-           [mk-fail-k
-            (lambda (success-k fail-k)
-              (lambda (max-depth tasks)
-                (parse-b stream last-consumed-token depth end success-k fail-k max-depth tasks)))])
-    (parse-a stream last-consumed-token depth end
-             (mk-got-k success-k fail-k)
-             (mk-fail-k success-k fail-k)
-             max-depth tasks)))
+  (define ((mk-got-k success-k fail-k) val stream last-consumed-token depth max-depth tasks next-k)
+    (success-k val stream last-consumed-token depth
+               max-depth tasks
+               (λ (success-k fail-k max-depth tasks)
+                 (next-k (mk-got-k success-k fail-k)
+                         (mk-fail-k success-k fail-k)
+                         max-depth tasks))))
+  (define ((mk-fail-k success-k fail-k) max-depth tasks)
+    (parse-b stream last-consumed-token depth end success-k fail-k max-depth tasks))
+  (parse-a stream last-consumed-token depth end
+           (mk-got-k success-k fail-k)
+           (mk-fail-k success-k fail-k)
+           max-depth tasks))
 
 ;; Starts a thread
-(define queue-task
-  (lambda (tasks t [progress? #t])
-    (make-tasks (tasks-active tasks)
-                (cons t (tasks-active-back tasks))
-                (tasks-waits tasks)
-                (tasks-multi-waits tasks)
-                (tasks-cache tasks)
-                (or progress? (tasks-progress? tasks)))))
+(define (queue-task tasks t [progress? #t])
+  (make-tasks (tasks-active tasks)
+              (cons t (tasks-active-back tasks))
+              (tasks-waits tasks)
+              (tasks-multi-waits tasks)
+              (tasks-cache tasks)
+              (or progress? (tasks-progress? tasks))))
 
 ;; Reports an answer to a waiting thread:
 (define (report-answer answer-key max-depth tasks val)
-  (let ([v (hash-ref (tasks-waits tasks) answer-key (lambda () #f))])
-    (if v
-        (let ([tasks (make-tasks (cons (v val)
-                                       (tasks-active tasks))
-                                 (tasks-active-back tasks)
-                                 (tasks-waits tasks)
-                                 (tasks-multi-waits tasks)
-                                 (tasks-cache tasks)
-                                 #t)])
-          (hash-remove! (tasks-waits tasks) answer-key)
-          (swap-task max-depth tasks))
-        ;; We have an answer ready too fast; wait
-        (swap-task max-depth
-                   (queue-task tasks
-                               (lambda (max-depth tasks)
-                                 (report-answer answer-key max-depth tasks val))
-                               #f)))))
+  (define v (hash-ref (tasks-waits tasks) answer-key (λ () #f)))
+  (if v
+      (let ([tasks (make-tasks (cons (v val) (tasks-active tasks))
+                               (tasks-active-back tasks)
+                               (tasks-waits tasks)
+                               (tasks-multi-waits tasks)
+                               (tasks-cache tasks)
+                               #t)])
+        (hash-remove! (tasks-waits tasks) answer-key)
+        (swap-task max-depth tasks))
+      ;; We have an answer ready too fast; wait
+      (swap-task max-depth
+                 (queue-task tasks
+                             (λ (max-depth tasks)
+                               (report-answer answer-key max-depth tasks val))
+                             #f))))
 
 ;; Reports an answer to multiple waiting threads:
 (define (report-answer-all answer-key max-depth tasks val k)
-  (let ([v (hash-ref (tasks-multi-waits tasks) answer-key (lambda () null))])
-    (hash-remove! (tasks-multi-waits tasks) answer-key)
-    (let ([tasks (make-tasks (append (map (lambda (a) (a val)) v)
-                                     (tasks-active tasks))
-                             (tasks-active-back tasks)
-                             (tasks-waits tasks)
-                             (tasks-multi-waits tasks)
-                             (tasks-cache tasks)
-                             #t)])
-      (k max-depth tasks))))
+  (define v (hash-ref (tasks-multi-waits tasks) answer-key (λ () null)))
+  (hash-remove! (tasks-multi-waits tasks) answer-key)
+  (let ([tasks (make-tasks (append (map (λ (a) (a val)) v)
+                                   (tasks-active tasks))
+                           (tasks-active-back tasks)
+                           (tasks-waits tasks)
+                           (tasks-multi-waits tasks)
+                           (tasks-cache tasks)
+                           #t)])
+    (k max-depth tasks)))
 
 ;; Waits for an answer; if `multi?' is #f, this is sole waiter, otherwise
 ;;  there might be many. Use wither #t or #f (and `report-answer' or 
 ;;  `report-answer-all', resptively) consistently for a particular answer key.
 (define (wait-for-answer multi? max-depth tasks answer-key success-k fail-k deadlock-k)
-  (let ([wait (lambda (val)
-                (lambda (max-depth tasks)
+  (let ([wait (λ (val)
+                (λ (max-depth tasks)
                   (if val
                       (if (null? val)
                           (fail-k max-depth tasks)
@@ -273,7 +242,7 @@
     (if multi?
         (hash-set! (tasks-multi-waits tasks) answer-key
                    (cons wait (hash-ref (tasks-multi-waits tasks) answer-key
-                                        (lambda () null))))
+                                        (λ () null))))
         (hash-set! (tasks-waits tasks) answer-key wait))
     (let ([tasks (make-tasks (tasks-active tasks)
                              (tasks-active-back tasks)
@@ -302,8 +271,8 @@
                          (make-tasks (apply
                                       append
                                       (hash-map (tasks-multi-waits tasks)
-                                                (lambda (k l)
-                                                  (map (lambda (v) (v #f)) l))))
+                                                (λ (k l)
+                                                  (map (λ (v) (v #f)) l))))
                                      (tasks-active-back tasks)
                                      (tasks-waits tasks)
                                      (make-hasheq)
@@ -325,11 +294,9 @@
 (define no-pos-val (make-position #f #f #f))
 (define-for-syntax no-pos 
   (let ([npv ((syntax-local-certifier) #'no-pos-val)])
-    (lambda (stx) npv)))
-(define-for-syntax at-tok-pos
-  (lambda (sel expr)
-    (lambda (stx)
-      #`(let ([v #,expr]) (if v (#,sel v) no-pos-val)))))
+    (λ (stx) npv)))
+(define-for-syntax ((at-tok-pos sel expr) stx)
+  #`(let ([v #,expr]) (if v (#,sel v) no-pos-val)))
 
 ;; Builds a matcher for a particular alternative
 (define-for-syntax (build-match nts toks pat handle $ctx)
@@ -337,27 +304,23 @@
              [pos 1])
     (if (null? pat)
         #`(success-k #,handle stream last-consumed-token depth max-depth tasks 
-                     (lambda (success-k fail-k max-depth tasks)
+                     (λ (success-k fail-k max-depth tasks)
                        (fail-k max-depth tasks)))
-        (let ([id (datum->syntax (car pat)
-                                 (string->symbol (format "$~a" pos)))]
-              [id-start-pos (datum->syntax (car pat)
-                                           (string->symbol (format "$~a-start-pos" pos)))]
-              [id-end-pos (datum->syntax (car pat)
-                                         (string->symbol (format "$~a-end-pos" pos)))]
-              [n-end-pos (and (null? (cdr pat))
-                              (datum->syntax (car pat) '$n-end-pos))])
+        (let ([id (datum->syntax (car pat) (string->symbol (format "$~a" pos)))]
+              [id-start-pos (datum->syntax (car pat) (string->symbol (format "$~a-start-pos" pos)))]
+              [id-end-pos (datum->syntax (car pat) (string->symbol (format "$~a-end-pos" pos)))]
+              [n-end-pos (and (null? (cdr pat)) (datum->syntax (car pat) '$n-end-pos))])
           (cond
-            [(bound-identifier-mapping-get nts (car pat) (lambda () #f))
+            [(bound-identifier-mapping-get nts (car pat) (λ () #f))
              ;; Match non-termimal
              #`(parse-and
                 ;; First part is simple? (If so, we don't have to parallelize the `and'.)
-                #,(let ([l (bound-identifier-mapping-get nts (car pat) (lambda () #f))])
+                #,(let ([l (bound-identifier-mapping-get nts (car pat) (λ () #f))])
                     (or (not l)
                         (andmap values (caddr l))))
                 #,(car pat)
                 (let ([original-stream stream])
-                  (lambda (#,id stream last-consumed-token depth end success-k fail-k max-depth tasks)
+                  (λ (#,id stream last-consumed-token depth end success-k fail-k max-depth tasks)
                     (let-syntax ([#,id-start-pos (at-tok-pos #'(if (eq? original-stream stream)
                                                                    tok-end
                                                                    tok-start)
@@ -372,10 +335,10 @@
                       #,(loop (cdr pat) (add1 pos)))))
                 stream last-consumed-token depth 
                 #,(let ([cnt (apply +
-                                    (map (lambda (item)
+                                    (map (λ (item)
                                            (cond
-                                             [(bound-identifier-mapping-get nts item (lambda () #f))
-                                              => (lambda (l) (car l))]
+                                             [(bound-identifier-mapping-get nts item (λ () #f))
+                                              => (λ (l) (car l))]
                                              [else 1]))
                                          (cdr pat)))])
                     #`(- end #,cnt))
@@ -419,75 +382,73 @@
                  [max-depth max-depth]
                  [tasks tasks]
                  [k k])
-        (let ([answer-key (gensym)]
-              [table-key (vector key depth n)]
-              [old-depth depth]
-              [old-stream stream])
-          #;(printf "Loop ~a\n" table-key)
-          (cond
-            [(hash-ref (tasks-cache tasks) table-key (lambda () #f))
-             => (lambda (result)
-                  #;(printf "Reuse ~a\n" table-key)
-                  (result success-k fail-k max-depth tasks))]
-            [else
-             #;(printf "Try ~a ~a\n" table-key (map tok-name stream))
-             (hash-set! (tasks-cache tasks) table-key
-                        (lambda (success-k fail-k max-depth tasks)
-                          #;(printf "Wait ~a ~a\n" table-key answer-key)
-                          (wait-for-answer #t max-depth tasks answer-key success-k fail-k
-                                           (lambda (max-depth tasks)
-                                             #;(printf "Deadlock ~a ~a\n" table-key answer-key)
-                                             (fail-k max-depth tasks)))))
-             (let result-loop ([max-depth max-depth][tasks tasks][k k])
-               (letrec ([orig-stream stream]
-                        [new-got-k
-                         (lambda (val stream last-consumed-token depth max-depth tasks next-k)
-                           ;; Check whether we already have a result that consumed the same amount:
-                           (let ([result-key (vector #f key old-depth depth)])
-                             (cond
-                               [(hash-ref (tasks-cache tasks) result-key (lambda () #f))
-                                ;; Go for the next-result
-                                (result-loop max-depth
-                                             tasks
-                                             (lambda (end max-depth tasks success-k fail-k)
-                                               (next-k success-k fail-k max-depth tasks)))]
-                               [else
-                                #;(printf "Success ~a ~a\n" table-key 
-                                          (map tok-name (let loop ([d old-depth][s old-stream])
-                                                          (if (= d depth)
-                                                              null
-                                                              (cons (car s) (loop (add1 d) (cdr s)))))))
-                                (let ([next-k (lambda (success-k fail-k max-depth tasks)
-                                                (loop (add1 n)
-                                                      success-k
-                                                      fail-k
-                                                      max-depth
-                                                      tasks
-                                                      (lambda (end max-depth tasks success-k fail-k)
-                                                        (next-k success-k fail-k max-depth tasks))))])
-                                  (hash-set! (tasks-cache tasks) result-key #t)
-                                  (hash-set! (tasks-cache tasks) table-key
-                                             (lambda (success-k fail-k max-depth tasks)
-                                               (success-k val stream last-consumed-token depth max-depth tasks next-k)))
-                                  (report-answer-all answer-key
-                                                     max-depth
-                                                     tasks
-                                                     (list val stream last-consumed-token depth next-k)
-                                                     (lambda (max-depth tasks)
-                                                       (success-k val stream last-consumed-token depth max-depth tasks next-k))))])))]
-                        [new-fail-k
-                         (lambda (max-depth tasks)
-                           #;(printf "Failure ~a\n" table-key)
-                           (hash-set! (tasks-cache tasks) table-key
-                                      (lambda (success-k fail-k max-depth tasks)
-                                        (fail-k max-depth tasks)))
-                           (report-answer-all answer-key
-                                              max-depth
-                                              tasks
-                                              null
-                                              (lambda (max-depth tasks)
-                                                (fail-k max-depth tasks))))])
-                 (k end max-depth tasks new-got-k new-fail-k)))])))))
+        (define answer-key (gensym))
+        (define table-key (vector key depth n))
+        (define old-depth depth)
+        (define old-stream stream)
+        #;(printf "Loop ~a\n" table-key)
+        (cond
+          [(hash-ref (tasks-cache tasks) table-key (λ () #f))
+           => (λ (result)
+                #;(printf "Reuse ~a\n" table-key)
+                (result success-k fail-k max-depth tasks))]
+          [else
+           #;(printf "Try ~a ~a\n" table-key (map tok-name stream))
+           (hash-set! (tasks-cache tasks) table-key
+                      (λ (success-k fail-k max-depth tasks)
+                        #;(printf "Wait ~a ~a\n" table-key answer-key)
+                        (wait-for-answer #t max-depth tasks answer-key success-k fail-k
+                                         (λ (max-depth tasks)
+                                           #;(printf "Deadlock ~a ~a\n" table-key answer-key)
+                                           (fail-k max-depth tasks)))))
+           (let result-loop ([max-depth max-depth][tasks tasks][k k])
+             (define orig-stream stream)
+             (define (new-got-k val stream last-consumed-token depth max-depth tasks next-k)
+               ;; Check whether we already have a result that consumed the same amount:
+               (define result-key (vector #f key old-depth depth))
+               (cond
+                 [(hash-ref (tasks-cache tasks) result-key (λ () #f))
+                  ;; Go for the next-result
+                  (result-loop max-depth
+                               tasks
+                               (λ (end max-depth tasks success-k fail-k)
+                                 (next-k success-k fail-k max-depth tasks)))]
+                 [else
+                  #;(printf "Success ~a ~a\n" table-key 
+                            (map tok-name (let loop ([d old-depth][s old-stream])
+                                            (if (= d depth)
+                                                null
+                                                (cons (car s) (loop (add1 d) (cdr s)))))))
+                  (let ([next-k (λ (success-k fail-k max-depth tasks)
+                                  (loop (add1 n)
+                                        success-k
+                                        fail-k
+                                        max-depth
+                                        tasks
+                                        (λ (end max-depth tasks success-k fail-k)
+                                          (next-k success-k fail-k max-depth tasks))))])
+                    (hash-set! (tasks-cache tasks) result-key #t)
+                    (hash-set! (tasks-cache tasks) table-key
+                               (λ (success-k fail-k max-depth tasks)
+                                 (success-k val stream last-consumed-token depth max-depth tasks next-k)))
+                    (report-answer-all answer-key
+                                       max-depth
+                                       tasks
+                                       (list val stream last-consumed-token depth next-k)
+                                       (λ (max-depth tasks)
+                                         (success-k val stream last-consumed-token depth max-depth tasks next-k))))]))
+             (define (new-fail-k max-depth tasks)
+               #;(printf "Failure ~a\n" table-key)
+               (hash-set! (tasks-cache tasks) table-key
+                          (λ (success-k fail-k max-depth tasks)
+                            (fail-k max-depth tasks)))
+               (report-answer-all answer-key
+                                  max-depth
+                                  tasks
+                                  null
+                                  (λ (max-depth tasks)
+                                    (fail-k max-depth tasks))))
+             (k end max-depth tasks new-got-k new-fail-k))]))))
 
 ;; These temp identifiers can't be `gensym` or `generate-temporary`
 ;; because they have to be consistent between module loads
@@ -497,39 +458,34 @@
 (define-for-syntax atok-id-temp 'atok_wrutdjgecmybyfipiwsgjlvsveryodlgassuzcargiuznzgdghrykfqfbwcjgzdhdoeqxcucmtjkuyucskzethozhqkasphdwbht)
 (define-syntax (cfg-parser stx)
   (syntax-case stx ()
-    [(_ clause ...)
-     (let ([clauses (syntax->list #'(clause ...))])
+    [(_ CLAUSE ...)
+     (let ([clauses (syntax->list #'(CLAUSE ...))])
        (let-values ([(start grammar cfg-error parser-clauses src-pos?)
                      (let ([all-toks (apply
                                       append
-                                      (map (lambda (clause)
-                                             (syntax-case clause (tokens)
-                                               [(tokens t ...)
-                                                (apply
-                                                 append
-                                                 (map (lambda (t)
-                                                        (let ([v (syntax-local-value t (lambda () #f))])
-                                                          (cond
-                                                            [(terminals-def? v)
-                                                             (map (lambda (v)
-                                                                    (cons v #f))
-                                                                  (syntax->list (terminals-def-t v)))]
-                                                            [(e-terminals-def? v)
-                                                             (map (lambda (v)
-                                                                    (cons v #t))
-                                                                  (syntax->list (e-terminals-def-t v)))]
-                                                            [else null])))
-                                                      (syntax->list #'(t ...))))]
-                                               [_else null]))
-                                           clauses))]
+                                      (for/list ([clause (in-list clauses)])
+                                                (syntax-case clause (tokens)
+                                                  [(tokens T ...)
+                                                   (apply
+                                                    append
+                                                    (for/list ([t (in-list (syntax->list #'(T ...)))])
+                                                              (define v (syntax-local-value t (λ () #f)))
+                                                              (cond
+                                                                [(terminals-def? v)
+                                                                 (for/list ([v (in-list (syntax->list (terminals-def-t v)))])
+                                                                           (cons v #f))]
+                                                                [(e-terminals-def? v)
+                                                                 (for/list ([v (in-list (syntax->list (e-terminals-def-t v)))])
+                                                                           (cons v #t))]
+                                                                [else null])))]
+                                                  [_else null])))]
                            [all-end-toks (apply
                                           append
-                                          (map (lambda (clause)
-                                                 (syntax-case clause (end)
-                                                   [(end t ...)
-                                                    (syntax->list #'(t ...))]
-                                                   [_else null]))
-                                               clauses))])
+                                          (for/list ([clause (in-list clauses)])
+                                                    (syntax-case clause (end)
+                                                      [(end T ...)
+                                                       (syntax->list #'(T ...))]
+                                                      [_else null])))])
                        (let loop ([clauses clauses]
                                   [cfg-start #f]
                                   [cfg-grammar #f]
@@ -543,47 +499,35 @@
                                      (reverse parser-clauses)
                                      src-pos?)
                              (syntax-case (car clauses) (start error grammar src-pos)
-                               [(start tok)
-                                (loop (cdr clauses) #'tok cfg-grammar cfg-error src-pos? parser-clauses)]
-                               [(error expr)
-                                (loop (cdr clauses) cfg-start cfg-grammar #'expr src-pos? parser-clauses)]
-                               [(grammar [nt [pat handle0 handle ...] ...] ...)
+                               [(start TOK)
+                                (loop (cdr clauses) #'TOK cfg-grammar cfg-error src-pos? parser-clauses)]
+                               [(error EXPR)
+                                (loop (cdr clauses) cfg-start cfg-grammar #'EXPR src-pos? parser-clauses)]
+                               [(grammar [NT [PAT HANDLE0 HANDLE ...] ...] ...)
                                 (let ([nts (make-bound-identifier-mapping)]
                                       [toks (make-token-identifier-mapping)]
                                       [end-toks (make-token-identifier-mapping)]
-                                      [nt-ids (syntax->list #'(nt ...))]
-                                      [patss (map (lambda (stx)
+                                      [nt-ids (syntax->list #'(NT ...))]
+                                      [patss (map (λ (stx)
                                                     (map syntax->list (syntax->list stx)))
-                                                  (syntax->list #'((pat ...) ...)))])
-                                  (for-each (lambda (nt)
-                                              (bound-identifier-mapping-put! nts nt (list 0)))
-                                            nt-ids)
-                                  (for-each (lambda (t)
-                                              (token-identifier-mapping-put! end-toks t #t))
-                                            all-end-toks)
-                                  (for-each (lambda (t)
-                                              (unless (token-identifier-mapping-get end-toks (car t) (lambda () #f))
-                                                (let ([id (gensym (syntax-e (car t)))])
-                                                  (token-identifier-mapping-put! toks (car t)
-                                                                                 (cons id (cdr t))))))
-                                            all-toks)
+                                                  (syntax->list #'((PAT ...) ...)))])
+                                  (for ([nt (in-list nt-ids)])
+                                       (bound-identifier-mapping-put! nts nt (list 0)))
+                                  (for ([t (in-list all-end-toks)])
+                                       (token-identifier-mapping-put! end-toks t #t))
+                                  (for ([t (in-list all-toks)]
+                                        #:unless (token-identifier-mapping-get end-toks (car t) (λ () #f)))
+                                       (define id (gensym (syntax-e (car t))))
+                                       (token-identifier-mapping-put! toks (car t) (cons id (cdr t))))
                                   ;; Compute min max size for each non-term:
                                   (nt-fixpoint
                                    nts
-                                   (lambda (nt pats old-list)
+                                   (λ (nt pats old-list)
                                      (let ([new-cnt
-                                            (apply
-                                             min
-                                             (map (lambda (pat)
-                                                    (apply
-                                                     +
-                                                     (map (lambda (elem)
-                                                            (car
-                                                             (bound-identifier-mapping-get nts
-                                                                                           elem
-                                                                                           (lambda () (list 1)))))
-                                                          pat)))
-                                                  pats))])
+                                            (apply min (for/list ([pat (in-list pats)])
+                                                                 (for/sum ([elem (in-list pat)])
+                                                                          (car (bound-identifier-mapping-get
+                                                                                nts elem  (λ () (list 1)))))))])
                                        (if (new-cnt . > . (car old-list))
                                            (cons new-cnt (cdr old-list))
                                            old-list)))
@@ -592,29 +536,28 @@
                                   ;;  for a non-terminal
                                   (nt-fixpoint
                                    nts
-                                   (lambda (nt pats old-list)
+                                   (λ (nt pats old-list)
                                      (let ([new-list
                                             (apply
                                              append
-                                             (map (lambda (pat)
-                                                    (let loop ([pat pat])
-                                                      (if (pair? pat)
-                                                          (let ([l (bound-identifier-mapping-get 
-                                                                    nts
-                                                                    (car pat)
-                                                                    (lambda ()
-                                                                      (list 1 (map-token toks (car pat)))))])
-                                                            ;; If the non-terminal can match 0 things,
-                                                            ;;  then it might match something from the
-                                                            ;;  next pattern element. Otherwise, it must
-                                                            ;;  match the first element:
-                                                            (if (zero? (car l))
-                                                                (append (cdr l) (loop (cdr pat)))
-                                                                (cdr l)))
-                                                          null)))
-                                                  pats))])
-                                       (let ([new (filter (lambda (id)
-                                                            (andmap (lambda (id2)
+                                             (for/list ([pat (in-list pats)])
+                                                       (let loop ([pat pat])
+                                                         (if (pair? pat)
+                                                             (let ([l (bound-identifier-mapping-get 
+                                                                       nts
+                                                                       (car pat)
+                                                                       (λ ()
+                                                                         (list 1 (map-token toks (car pat)))))])
+                                                               ;; If the non-terminal can match 0 things,
+                                                               ;;  then it might match something from the
+                                                               ;;  next pattern element. Otherwise, it must
+                                                               ;;  match the first element:
+                                                               (if (zero? (car l))
+                                                                   (append (cdr l) (loop (cdr pat)))
+                                                                   (cdr l)))
+                                                             null))))])
+                                       (let ([new (filter (λ (id)
+                                                            (andmap (λ (id2)
                                                                       (not (eq? id id2)))
                                                                     (cdr old-list)))
                                                           new-list)])
@@ -623,7 +566,7 @@
                                              (let ([new (let loop ([new new])
                                                           (if (null? (cdr new))
                                                               new
-                                                              (if (ormap (lambda (id)
+                                                              (if (ormap (λ (id)
                                                                            (eq? (car new) id))
                                                                          (cdr new))
                                                                   (loop (cdr new))
@@ -632,26 +575,26 @@
                                              old-list))))
                                    nt-ids patss)
                                   ;; Determine left-recursive clauses:
-                                  (for-each (lambda (nt pats)
+                                  (for-each (λ (nt pats)
                                               (let ([l (bound-identifier-mapping-get nts nt)])
                                                 (bound-identifier-mapping-put! nts nt (list (car l)
                                                                                             (cdr l)
-                                                                                            (map (lambda (x) #f) pats)))))
+                                                                                            (map (λ (x) #f) pats)))))
                                             nt-ids patss)
                                   (nt-fixpoint
                                    nts
-                                   (lambda (nt pats old-list)
+                                   (λ (nt pats old-list)
                                      (list (car old-list)
                                            (cadr old-list)
-                                           (map (lambda (pat simple?)
+                                           (map (λ (pat simple?)
                                                   (or simple?
-                                                      (let ([l (map (lambda (elem)
+                                                      (let ([l (map (λ (elem)
                                                                       (bound-identifier-mapping-get 
                                                                        nts
                                                                        elem
-                                                                       (lambda () #f)))
+                                                                       (λ () #f)))
                                                                     pat)])
-                                                        (andmap (lambda (i)
+                                                        (andmap (λ (i)
                                                                   (or (not i)
                                                                       (andmap values (caddr i))))
                                                                 l))))
@@ -660,16 +603,16 @@
                                   ;; Build a definition for each non-term:
                                   (loop (cdr clauses)
                                         cfg-start
-                                        (map (lambda (nt pats handles $ctxs)
+                                        (map (λ (nt pats handles $ctxs)
                                                (define info (bound-identifier-mapping-get nts nt))
                                                (list nt
                                                      #`(let ([key (gensym '#,nt)])
-                                                         (lambda (stream last-consumed-token depth end success-k fail-k max-depth tasks)
+                                                         (λ (stream last-consumed-token depth end success-k fail-k max-depth tasks)
                                                            (parse-nt/share
                                                             key #,(car info) '#,(cadr info) stream last-consumed-token depth end
                                                             max-depth tasks
                                                             success-k fail-k
-                                                            (lambda (end max-depth tasks success-k fail-k)
+                                                            (λ (end max-depth tasks success-k fail-k)
                                                               #,(let loop ([pats pats]
                                                                            [handles (syntax->list handles)]
                                                                            [$ctxs (syntax->list $ctxs)]
@@ -680,13 +623,13 @@
                                                                                    (car simple?s))
                                                                                #'parse-or
                                                                                #'parse-parallel-or)
-                                                                         (lambda (stream last-consumed-token depth end success-k fail-k max-depth tasks)
+                                                                         (λ (stream last-consumed-token depth end success-k fail-k max-depth tasks)
                                                                            #,(build-match nts
                                                                                           toks 
                                                                                           (car pats)
                                                                                           (car handles)
                                                                                           (car $ctxs)))
-                                                                         (lambda (stream last-consumed-token depth end success-k fail-k max-depth tasks)
+                                                                         (λ (stream last-consumed-token depth end success-k fail-k max-depth tasks)
                                                                            #,(loop (cdr pats)
                                                                                    (cdr handles)
                                                                                    (cdr $ctxs)
@@ -694,14 +637,14 @@
                                                                          stream last-consumed-token depth end success-k fail-k max-depth tasks)))))))))
                                              nt-ids
                                              patss
-                                             (syntax->list #'(((begin handle0 handle ...) ...) ...))
-                                             (syntax->list #'((handle0 ...) ...)))
+                                             (syntax->list #'(((begin HANDLE0 HANDLE ...) ...) ...))
+                                             (syntax->list #'((HANDLE0 ...) ...)))
                                         cfg-error
                                         src-pos?
                                         (list*
                                          (with-syntax ([((tok tok-id . $e) ...)
                                                         (token-identifier-mapping-map toks
-                                                                                      (lambda (k v)
+                                                                                      (λ (k v)
                                                                                         (list* k
                                                                                                (car v)
                                                                                                (if (cdr v)
@@ -743,19 +686,19 @@
                                       src-pos?
                                       (cons (car clauses) parser-clauses))]))))])
          #`(let ([orig-parse (parser 
-                              [error (lambda (a b c)
+                              [error (λ (a b c)
                                        (error 'cfg-parser "unexpected ~a token: ~a" b c))]
                               . #,parser-clauses)]
                  [error-proc #,cfg-error])
              (letrec #,grammar 
-               (lambda (get-tok)
+               (λ (get-tok)
                  (let ([tok-list (orig-parse get-tok)])
                    (letrec ([success-k
-                             (lambda (val stream last-consumed-token depth max-depth tasks next) 
+                             (λ (val stream last-consumed-token depth max-depth tasks next) 
                                (if (null? stream)
                                    val
                                    (next success-k fail-k max-depth tasks)))]
-                            [fail-k (lambda (max-depth tasks)
+                            [fail-k (λ (max-depth tasks)
                                       (cond
                                         [(null? tok-list)
                                          (if error-proc
@@ -847,7 +790,7 @@
    (define (parse s)
      (define ip (open-input-string s))
      (port-count-lines! ip)
-     (-parse (lambda () (lex ip))))
+     (-parse (λ () (lex ip))))
    
    (check-equal? (parse "abc")
                  '(unanchored (lit "abc" 1 4) 1 4))
@@ -881,7 +824,7 @@
      (tokens non-terminals)
      (start <program>)
      (end EOF)
-     (error (lambda (a b stx) 
+     (error (λ (a b stx) 
               (error 'parse "failed at ~s" stx)))
      (grammar [<program> [(PLUS) "plus"]
                          [(<minus-program> BAR <minus-program>) (list $1 $2 $3)]
@@ -903,7 +846,7 @@
                -|-*|-|-**|-|-*|-|-***|-|-*|-|-**|-|-*|-|-*****"
                               ;; This one fails:
                               #;"+*")])
-    (check-equal? (parse (lambda () (lex p)))
+    (check-equal? (parse (λ () (lex p)))
                   '((((((((((("minus" || "minus") . *) || (("minus" || "minus") . *)) . *) || (((("minus" || "minus") . *) || (("minus" || "minus") . *)) . *)) . *)
                         ||
                         (((((("minus" || "minus") . *) || (("minus" || "minus") . *)) . *) || (((("minus" || "minus") . *) || (("minus" || "minus") . *)) . *)) . *))

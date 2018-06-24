@@ -1,4 +1,4 @@
-#lang scheme
+#lang racket/base
 
 ;; An interactive calculator inspired by the calculator example in the bison manual.
 
@@ -15,19 +15,19 @@
 (define vars (make-hash))
 
 (define-lex-abbrevs
- (lower-letter (:/ "a" "z"))
+  (lower-letter (:/ "a" "z"))
 
- (upper-letter (:/ #\A #\Z))
+  (upper-letter (:/ #\A #\Z))
 
- ;; (:/ 0 9) would not work because the lexer does not understand numbers.  (:/ #\0 #\9) is ok too.
- (digit (:/ "0" "9")))
+  ;; (:/ 0 9) would not work because the lexer does not understand numbers.  (:/ #\0 #\9) is ok too.
+  (digit (:/ "0" "9")))
  
-(define calcl
+(define calc-lex
   (lexer
    [(eof) 'EOF]
    ;; recursively call the lexer on the remaining input after a tab or space.  Returning the
    ;; result of that operation.  This effectively skips all whitespace.
-   [(:or #\tab #\space) (calcl input-port)]
+   [(:or #\tab #\space) (calc-lex input-port)]
    ;; (token-newline) returns 'newline
    [#\newline (token-newline)]
    ;; Since (token-=) returns '=, just return the symbol directly
@@ -40,7 +40,7 @@
    [(:: (:+ digit) #\. (:* digit)) (token-NUM (string->number lexeme))]))
    
 
-(define calcp
+(define calc-parse
   (parser
 
    (start start)
@@ -78,12 +78,15 @@
 ;; run the calculator on the given input-port       
 (define (calc ip)
   (port-count-lines! ip)
-  (letrec ((one-line
-	    (lambda ()
-	      (let ((result (calcp (lambda () (calcl ip)))))
-		(when result
-                  (printf "~a\n" result)
-                  (one-line))))))
-    (one-line)))
+  (let loop ()
+    (define result (calc-parse (λ () (calc-lex ip))))
+    (when result
+      (printf "~a\n" result)
+      (loop))))
 
-(calc (open-input-string "x=1\n(x + 2 * 3) - (1+2)*3"))
+(module+ test
+  (require rackunit)
+  (check-equal? (let ([o (open-output-string)])
+                  (parameterize ([current-output-port o])
+                    (calc (open-input-string "x=1\n(x + 2 * 3) - (1+2)*3")))
+                  (get-output-string o)) "1\n-2\n"))

@@ -1,6 +1,5 @@
-#lang racket
-
-(require "util.rkt")
+#lang racket/base
+(require racket/promise "util.rkt")
 
 (provide (all-defined-out))
 
@@ -10,36 +9,33 @@
 ;; get-chars-for-x : (nat -> bool) (listof (list nat nat bool)) -> (listof (cons nat nat))
 (define (get-chars-for char-x? mapped-chars)
   (cond
-    ((null? mapped-chars) null)
-    (else
-     (let* ((range (car mapped-chars))
-            (low (car range))
-            (high (cadr range))
-            (x (char-x? low)))
-       (cond
-         ((caddr range)
-          (if x
-              (cons (cons low high)
-                    (get-chars-for char-x? (cdr mapped-chars)))
-              (get-chars-for char-x? (cdr mapped-chars))))
-         (else
-          (let loop ((range-start low)
-                     (i (car range))
-                     (parity x))
-            (cond
-              ((> i high)
-               (if parity
-                   (cons (cons range-start high) (get-chars-for char-x? (cdr mapped-chars)))
-                   (get-chars-for char-x? (cdr mapped-chars))))
-              ((eq? parity (char-x? i))
-               (loop range-start (add1 i) parity))
-              (parity
-               (cons (cons range-start (sub1 i)) (loop i (add1 i) #f)))
-              (else
-               (loop i (add1 i) #t))))))))))
+    [(null? mapped-chars) null]
+    [else
+     (define range (car mapped-chars))
+     (define low (car range))
+     (define high (cadr range))
+     (define x (char-x? low))
+     (cond
+       [(caddr range)
+        (if x
+            (cons (cons low high) (get-chars-for char-x? (cdr mapped-chars)))
+            (get-chars-for char-x? (cdr mapped-chars)))]
+       [else
+        (let loop ([range-start low]
+                   [i (car range)]
+                   [parity x])
+          (cond
+            [(> i high)
+             (if parity
+                 (cons (cons range-start high) (get-chars-for char-x? (cdr mapped-chars)))
+                 (get-chars-for char-x? (cdr mapped-chars)))]
+            [(eq? parity (char-x? i))
+             (loop range-start (add1 i) parity)]
+            [parity (cons (cons range-start (sub1 i)) (loop i (add1 i) #f))]
+            [else (loop i (add1 i) #t)]))])]))
 
 (define (compute-ranges x?)
-  (delay (get-chars-for (lambda (x) (x? (integer->char x))) mapped-chars)))
+  (delay (get-chars-for (λ (x) (x? (integer->char x))) mapped-chars)))
 
 (define alphabetic-ranges   (compute-ranges char-alphabetic?))  ;; 325
 (define lower-case-ranges   (compute-ranges char-lower-case?))  ;; 405
@@ -61,7 +57,7 @@
   (check-equal? (get-chars-for odd? '()) '())
   (check-equal? (get-chars-for odd? '((1 4 #f) (8 13 #f)))
                 '((1 . 1) (3 . 3) (9 . 9) (11 . 11) (13 . 13)))
-  (check-equal? (get-chars-for (lambda (x)
+  (check-equal? (get-chars-for (λ (x)
                                  (odd? (quotient x 10)))
                                '((1 5 #t) (17 19 #t) (21 51 #f)))
                 '((17 . 19) (30 . 39) (50 . 51))))

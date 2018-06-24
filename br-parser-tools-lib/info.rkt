@@ -7,5 +7,3 @@
 (define build-deps '("rackunit-lib"))
 
 (define pkg-desc "implementation (no documentation) part of \"br-parser-tools\"")
-
-(define pkg-authors '(mflatt))
