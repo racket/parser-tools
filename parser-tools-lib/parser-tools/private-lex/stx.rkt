@@ -217,5 +217,10 @@
     (check-equal? (parse #'(char-range #\1 "1") null) '(char-range #\1 #\1))
     (check-equal? (parse #'(char-range "1" "3") null) '(char-range #\1 #\3))
     (check-equal? (parse #'(char-complement (union "1" "2")) null)
-                  '(char-complement (union "1" "2"))))
+                  '(char-complement (union "1" "2")))
+    (check-equal? (parse #'(char-complement (repetition 1 1 "5")) null)
+                  '(char-complement (repetition 1 1 "5")))
+    (check-exn #rx"not a character set"
+               (λ () (parse #'(char-complement
+                               (union "1" (repetition 2 2 "5"))) null))))
 ;  )
