@@ -181,6 +181,7 @@
     (check-equal? (char-set? '(repetition 1 2 #\1)) #f)
     (check-equal? (char-set? '(repetition 1 1 "12")) #f)
     (check-equal? (char-set? '(repetition 1 1 "1")) #t)
+    (check-equal? (char-set? '(repetition 6 6 "1")) #t)
     (check-equal? (char-set? '(union "1" "2" "3")) #t)
     (check-equal? (char-set? '(union "1" "" "3")) #f)
     (check-equal? (char-set? '(intersection "1" "2" (union "3" "4"))) #t)
