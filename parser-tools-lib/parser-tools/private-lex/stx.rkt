@@ -166,7 +166,7 @@
            ((union intersection) (andmap char-set? (cdr s-re)))
            ((char-range char-complement) #t)
            ((repetition)
-            (and (= (cadr s-re) (caddr s-re)) (char-set? (cadddr s-re))))
+            (and (= 1 (cadr s-re) (caddr s-re)) (char-set? (cadddr s-re))))
            ((concatenation)
             (and (= 2 (length s-re)) (char-set? (cadr s-re))))
            (else #f))))
@@ -181,6 +181,7 @@
     (check-equal? (char-set? '(repetition 1 2 #\1)) #f)
     (check-equal? (char-set? '(repetition 1 1 "12")) #f)
     (check-equal? (char-set? '(repetition 1 1 "1")) #t)
+    (check-equal? (char-set? '(repetition 6 6 "1")) #f)
     (check-equal? (char-set? '(union "1" "2" "3")) #t)
     (check-equal? (char-set? '(union "1" "" "3")) #f)
     (check-equal? (char-set? '(intersection "1" "2" (union "3" "4"))) #t)
@@ -216,5 +217,10 @@
     (check-equal? (parse #'(char-range #\1 "1") null) '(char-range #\1 #\1))
     (check-equal? (parse #'(char-range "1" "3") null) '(char-range #\1 #\3))
     (check-equal? (parse #'(char-complement (union "1" "2")) null)
-                  '(char-complement (union "1" "2"))))
+                  '(char-complement (union "1" "2")))
+    (check-equal? (parse #'(char-complement (repetition 1 1 "5")) null)
+                  '(char-complement (repetition 1 1 "5")))
+    (check-exn #rx"not a character set"
+               (λ () (parse #'(char-complement
+                               (union "1" (repetition 2 2 "5"))) null))))
 ;  )
