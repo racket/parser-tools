@@ -272,12 +272,22 @@
   
   (define (make-empty-stack i) (list (make-stack-frame i #f #f #f)))
   
-  
   ;; The table is a vector that maps each state to a hash-table that maps a
   ;; terminal symbol to either an accept, shift, reduce, or goto structure.
   ;  We encode the structures according to the runtime-action data definition in
   ;; parser-actions.rkt
-  (define (parser-body debug? err starts ends table all-term-syms actions src-pos)
+  (define (parser-body debug? given-err starts ends table all-term-syms actions src-pos)
+    (define (pre-err stack-excerpt . more)
+      (define actual
+        (if (procedure-arity-includes? given-err (add1 (length more)))
+          (cons stack-excerpt more)
+          more))
+      (apply given-err actual))
+    (define (err stack tok-ok? tok val start-pos end-pos)
+      (define stack-excerpt (map (λ (sf) (cons (stack-frame-state sf) (stack-frame-value sf))) stack))
+      (if src-pos
+        (pre-err stack-excerpt tok-ok? tok val start-pos end-pos)
+        (pre-err stack-excerpt tok-ok? tok val)))
     (local ((define extract
               (if src-pos
                   extract-src-pos
@@ -330,9 +340,7 @@
               (unless (hash-ref all-term-syms
                                 tok
                                 #f)
-                (if src-pos
-                    (err #f tok val start-pos end-pos)
-                    (err #f tok val))
+                (err stack #f tok val start-pos end-pos)
                 (raise-read-error (format "parser: got token of unknown type ~a" tok)
                                   #f #f #f #f #f))
               (hash-ref (vector-ref table (stack-frame-state (car stack)))
@@ -391,9 +399,7 @@
                          ;; (printf "accept\n")
                          (stack-frame-value (car stack)))
                         (else 
-                         (if src-pos
-                             (err #t tok val start-pos end-pos)
-                             (err #t tok val))
+                         (err stack #t tok val start-pos end-pos)
                          (parsing-loop (fix-error stack tok val start-pos end-pos get-token)
                                        (get-token))))))))))
       (cond

@@ -620,8 +620,9 @@ be the right choice when using @racket[lexer] in other situations.
       is that an invalid token was received.  The second and third
       arguments will be the name and the value of the token at which
       the error was detected.  The fourth and fifth arguments, if
-      present, provide the source positions of that token.}
+      present, provide the source positions of that token.
 
+      In both cases, the function is allowed to accept an additional argument (i.e. either 6 or 4), which is prepended before any others. This argument is a representation of the parsing automata's stack. This can, for example, be used to generate context-sensitive error messages as described in @link["https://dl.acm.org/citation.cfm?id=937563.937566"]{Generating LR syntax error messages from examples}, by Clinton L. Jeffrey.}
 
       @item{@racket[(precs (assoc token-id ...) ...)]
       @italic{OPTIONAL}
