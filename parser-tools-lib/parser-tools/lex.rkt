@@ -8,6 +8,7 @@
                       syntax/define
                       syntax/boundmap
                       syntax/parse
+                      (only racket/base log-error)
                       "private-lex/util.rkt"
                       "private-lex/actions.rkt"
                       "private-lex/front.rkt"
@@ -109,6 +110,7 @@
                           ;; All the successor states are final
                           (andmap (lambda (x) (vector-ref action-names (vector-ref x 2)))
                                       (vector->list (vector-ref trans start)))
+                          ;; Each character has a successor state
                           (let loop ((check 0)
                                      (nexts (vector->list (vector-ref trans start))))
                             (cond
@@ -119,7 +121,7 @@
                                       (let ((next-check (vector-ref next 1)))
                                         (or (>= next-check max-char-num)
                                             (loop (add1 next-check) (cdr nexts))))))))))
-                   (eprintf "Warning: lexer at ~a can accept the empty string.\n" stx)))
+                   (log-error "Warning: lexer at ~a can accept the empty string.\n" stx)))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
                              (no-lookahead-stx no-look)
