@@ -249,7 +249,7 @@ are a few examples, using @racket[:] prefixed SRE syntax:
 
  @history[#:changed "7.7.0.7" @elem{Add @racket[#:suppress-warnings] flag.}]}
 
-@defform[(lexer-src-pos (trigger action-expr) ...)]{
+@defform[(lexer-src-pos maybe-suppress-warnings [trigger action-expr] ...)]{
 
 Like @racket[lexer], but for each @racket[_action-result] produced by
 an @racket[action-expr], returns @racket[(make-position-token
