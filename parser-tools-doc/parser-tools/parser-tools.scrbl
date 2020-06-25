@@ -33,8 +33,10 @@ style lexer and parser generators.
 @defform/subs[#:literals (repetition union intersection complement concatenation
                           char-range char-complement
                           eof special special-comment)
-              (lexer [trigger action-expr] ...)
-              ([trigger re
+              (lexer maybe-suppress-warnings [trigger action-expr] ...)
+              ([maybe-suppress-warnings (code:line)
+                                        #:suppress-warnings]
+               [trigger re
                         (eof)
                         (special)
                         (special-comment)]
@@ -239,7 +241,13 @@ are a few examples, using @racket[:] prefixed SRE syntax:
     @filepath{.rkt} file containing a @racket[lexer] form is loaded),
     the lexer generator is run.  To avoid this overhead place the
     lexer into a module and compile the module to a @filepath{.zo}
-    bytecode file.}
+    bytecode file.
+
+ If the lexer can accept the empty string, a message is sent
+ to @racket[current-logger]. These warnings can be disabled
+ by giving the @racket[#:suppress-warnings] flag.
+
+ @history[#:changed "7.7.0.7" @elem{Add @racket[#:suppress-warnings] flag.}]}
 
 @defform[(lexer-src-pos (trigger action-expr) ...)]{
 
