@@ -7,6 +7,8 @@
                       syntax/stx
                       syntax/define
                       syntax/boundmap
+                      syntax/parse
+                      (only racket/base log-error)
                       "private-lex/util.rkt"
                       "private-lex/actions.rkt"
                       "private-lex/front.rkt"
@@ -53,8 +55,13 @@
         
   (define-for-syntax (make-lexer-trans src-pos?)
     (lambda (stx)
-      (syntax-case stx ()
-        ((_ re-act ...)
+      (define-splicing-syntax-class maybe-suppress-warnings
+        (pattern (~seq #:suppress-warnings)
+                 #:attr suppress? #t)
+        (pattern (~seq)
+                 #:attr suppress? #f))
+      (syntax-parse stx
+        ((_ suppress:maybe-suppress-warnings re-act ...)
          (begin
            (for-each
             (lambda (x)
@@ -97,8 +104,9 @@
                (raise-syntax-error (if src-pos? 'lexer/src-pos 'lexer) "expected at least one action" stx))
              (let-values (((trans start action-names no-look disappeared-uses)
                            (build-lexer re-actname-lst)))
-               (when (vector-ref action-names start) ;; Start state is final
-                 (unless (and 
+               (when (and (not (attribute suppress.suppress?))
+                          (vector-ref action-names start)) ;; Start state is final
+                 (unless (and
                           ;; All the successor states are final
                           (andmap (lambda (x) (vector-ref action-names (vector-ref x 2)))
                                       (vector->list (vector-ref trans start)))
@@ -113,7 +121,7 @@
                                       (let ((next-check (vector-ref next 1)))
                                         (or (>= next-check max-char-num)
                                             (loop (add1 next-check) (cdr nexts))))))))))
-                   (eprintf "Warning: lexer at ~a can accept the empty string.\n" stx)))
+                   (log-error "Warning: lexer at ~a can accept the empty string.\n" stx)))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
                              (no-lookahead-stx no-look)
