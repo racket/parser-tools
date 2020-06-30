@@ -9,3 +9,4 @@
 (define pkg-desc "implementation (no documentation) part of \"parser-tools\"")
 
 (define pkg-authors '(mflatt))
+(define version "1.1")

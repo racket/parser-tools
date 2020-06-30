@@ -13,6 +13,8 @@
 
 (provide parser)
 
+;; Only set around calls to error callback.
+(define current-parser-stack (make-parameter null))
 
   ;; convert-parse-table : (vectorof (listof (cons/c gram-sym? action?))) ->
   ;;                       (vectorof (symbol runtime-action hashtable))
@@ -268,7 +270,7 @@
   (define (extract-no-src-pos ip)
     (extract-helper ip #f #f))
   
-  (define-struct stack-frame (state value start-pos end-pos) #:inspector (make-inspector))
+  (define-struct stack-frame (state value start-pos end-pos) #:prefab)
   
   (define (make-empty-stack i) (list (make-stack-frame i #f #f #f)))
   
@@ -330,9 +332,10 @@
               (unless (hash-ref all-term-syms
                                 tok
                                 #f)
-                (if src-pos
-                    (err #f tok val start-pos end-pos)
-                    (err #f tok val))
+                (parameterize ((current-parser-stack stack))
+                  (if src-pos
+                      (err #f tok val start-pos end-pos)
+                      (err #f tok val)))
                 (raise-read-error (format "parser: got token of unknown type ~a" tok)
                                   #f #f #f #f #f))
               (hash-ref (vector-ref table (stack-frame-state (car stack)))
@@ -390,10 +393,11 @@
                         ((runtime-accept? action)
                          ;; (printf "accept\n")
                          (stack-frame-value (car stack)))
-                        (else 
-                         (if src-pos
-                             (err #t tok val start-pos end-pos)
-                             (err #t tok val))
+                        (else
+                         (parameterize ((current-parser-stack stack))
+                           (if src-pos
+                               (err #t tok val start-pos end-pos)
+                               (err #t tok val)))
                          (parsing-loop (fix-error stack tok val start-pos end-pos get-token)
                                        (get-token))))))))))
       (cond
@@ -404,3 +408,7 @@
            (cond
              ((null? l) null)
              (else (cons (make-parser i) (loop (cdr l) (add1 i))))))))))
+
+(module+ debug
+  (provide current-parser-stack
+           (struct-out stack-frame)))
