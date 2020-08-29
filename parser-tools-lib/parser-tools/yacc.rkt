@@ -278,13 +278,14 @@
   ;; parser-actions.rkt
   (define (parser-body debug? given-err starts ends table all-term-syms actions src-pos)
     (define (pre-err stack-excerpt . more)
-      (define actual
-        (if (procedure-arity-includes? given-err (add1 (length more)))
-          (cons stack-excerpt more)
-          more))
-      (apply given-err actual))
+      (define-values (req opts) (procedure-keywords given-err))
+      (if (or (not opts) (member '#:stack opts))
+          (apply given-err #:stack stack-excerpt more)
+          (apply given-err more)))
     (define (err stack tok-ok? tok val start-pos end-pos)
-      (define stack-excerpt (map (λ (sf) (cons (stack-frame-state sf) (stack-frame-value sf))) stack))
+      (define stack-excerpt
+        (map (λ (sf) (cons (stack-frame-state sf) (stack-frame-value sf)))
+             stack))
       (if src-pos
         (pre-err stack-excerpt tok-ok? tok val start-pos end-pos)
         (pre-err stack-excerpt tok-ok? tok val)))

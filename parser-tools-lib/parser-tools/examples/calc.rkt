@@ -58,7 +58,7 @@
    (end newline EOF)
    (tokens value-tokens op-tokens)
    (error
-    (lambda (se tok-ok? tok-name tok-value)
+    (lambda (tok-ok? tok-name tok-value #:stack se)
       (define pe
         (hash-ref parser-errors se #f))
       (if pe (error 'calc pe)
