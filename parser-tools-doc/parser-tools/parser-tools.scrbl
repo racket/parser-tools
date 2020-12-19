@@ -1,11 +1,14 @@
 #lang scribble/doc
 @(require scribble/manual scribble/struct scribble/xref scribble/bnf
+          scribble/example
           (for-label scheme/base
                      scheme/contract
                      parser-tools/lex
                      (prefix-in : parser-tools/lex-sre)
                      parser-tools/yacc
                      parser-tools/cfg-parser))
+
+@(define parser-eval (make-base-eval '(require parser-tools/lex parser-tools/yacc)))
 
 @title{Parser Tools: @exec{lex} and @exec{yacc}-style Parsing}
 
@@ -246,6 +249,22 @@ are a few examples, using @racket[:] prefixed SRE syntax:
  If the lexer can accept the empty string, a message is sent
  to @racket[current-logger]. These warnings can be disabled
  by giving the @racket[#:suppress-warnings] flag.
+
+ @examples[#:eval parser-eval
+   (define the-lexer
+     (lexer
+      [(eof) eof]
+      ["(" 'left-paren]
+      [")" 'right-paren]
+      [(repetition 1 +inf.0 numeric) (string->number lexeme)]
+      [(concatenation (union alphabetic #\_)
+                      (repetition 0 +inf.0 (union alphabetic numeric #\_)))
+       lexeme]
+      (code:comment @#,elem{invoke the lexer again to skip the current token})
+      [whitespace (the-lexer input-port)]))
+   (define s (open-input-string "( lambda (a ) (add_number a 42))"))
+   (list (the-lexer s) (the-lexer s) (the-lexer s) (the-lexer s) (the-lexer s))
+ ]
 
  @history[#:changed "7.7.0.7" @elem{Add @racket[#:suppress-warnings] flag.}]}
 
@@ -495,6 +514,24 @@ be the right choice when using @racket[lexer] in other situations.
   Returns @racket[#t] if @racket[val] is a
   token structure, @racket[#f] otherwise.}
 
+@examples[#:eval parser-eval
+  (define-tokens basic-tokens (number id))
+  (define-empty-tokens punct-tokens (left-paren right-paren the-end))
+  (define the-lexer
+    (lexer
+     [(eof) (token-the-end)]
+     ["(" (token-left-paren)]
+     [")" (token-right-paren)]
+     [(repetition 1 +inf.0 numeric) (token-number (string->number lexeme))]
+     [(concatenation (union alphabetic #\_)
+                     (repetition 0 +inf.0 (union alphabetic numeric #\_)))
+      (token-id (string->symbol lexeme))]
+     (code:comment @#,elem{invoke the lexer again to skip the current token})
+     [whitespace (the-lexer input-port)]))
+  (define s (open-input-string "( lambda (a ) (add_number a 42))"))
+  (list (the-lexer s) (the-lexer s) (the-lexer s) (the-lexer s) (the-lexer s))
+]
+
 @; ----------------------------------------------------------------------
 
 @section{LALR(1) Parsers}
@@ -707,11 +744,42 @@ be the right choice when using @racket[lexer] in other situations.
     (e.g. when a @filepath{.rkt} file containing a @racket[parser] form
     is loaded), the parser generator is run.  To avoid this overhead
     place the parser into a module and compile the module to a
-    @filepath{.zo} bytecode file.}
+    @filepath{.zo} bytecode file.
 
-                                            
-                                            
-                                            
+
+    @examples[#:eval parser-eval
+      (define-tokens basic-tokens (number id))
+      (define-empty-tokens punct-tokens (left-paren right-paren the-end))
+      (define the-lexer
+        (lexer
+         [(eof) (token-the-end)]
+         ["(" (token-left-paren)]
+         [")" (token-right-paren)]
+         [(repetition 1 +inf.0 numeric) (token-number (string->number lexeme))]
+         [(concatenation (union alphabetic #\_)
+                         (repetition 0 +inf.0 (union alphabetic numeric #\_)))
+          (token-id (string->symbol lexeme))]
+         (code:comment @#,elem{invoke the lexer again to skip the current token})
+         [whitespace (the-lexer input-port)]))
+
+      (define the-parser
+        (parser
+         [start expr]
+         [end the-end]
+         [error void]
+         [tokens basic-tokens punct-tokens]
+         [grammar
+          [expr [(left-paren exprs right-paren) $2]
+                [(number) $1]
+                [(id) $1]]
+          [exprs [() '()]
+                 [(expr exprs) (cons $1 $2)]]]))
+
+      (define s (open-input-string "( lambda (a ) (add_number a 42))"))
+      (the-parser (λ () (the-lexer s)))
+    ]
+}
+
 @section{Context-Free Parsers}
 
 @section-index["cfg-parser"]
