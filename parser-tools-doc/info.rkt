@@ -12,3 +12,6 @@
 (define pkg-desc "documentation part of \"parser-tools\"")
 
 (define pkg-authors '(mflatt))
+
+(define license
+  '(Apache-2.0 OR MIT))
