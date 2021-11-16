@@ -1,4 +1,4 @@
-(module token-syntax mzscheme
+#lang racket/base
 
   ;; The things needed at compile time to handle definition of tokens
   
@@ -6,4 +6,4 @@
            make-e-terminals-def e-terminals-def-t e-terminals-def?)
   (define-struct terminals-def (t))
   (define-struct e-terminals-def (t))
-  )
+

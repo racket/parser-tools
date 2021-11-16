@@ -1,6 +1,6 @@
-(module yacc-helper mzscheme
+#lang racket/base
 
-  (require mzlib/list
+  (require racket/list
            "../private-lex/token-syntax.rkt")
 
   ;; General helper routines
@@ -19,29 +19,29 @@
   ;; returns a symbol that exists twice in l, or false if no such symbol 
   ;; exists
   (define (duplicate-list? l)
-    (letrec ((t (make-hash-table))
+    (letrec ((t (make-hasheq))
 	     (dl? (lambda (l)
 		    (cond
 		     ((null? l) #f)
-		     ((hash-table-get t (car l) (lambda () #f)) => 
+		     ((hash-ref t (car l) #f) => 
 		      (lambda (x) x))
 		     (else
-		      (hash-table-put! t (car l) (car l))
+		      (hash-set! t (car l) (car l))
 		      (dl? (cdr l)))))))
       (dl? l)))
 
   ;; remove-duplicates: syntax-object list -> syntax-object list
   ;; removes the duplicates from the lists
   (define (remove-duplicates sl)
-    (let ((t (make-hash-table)))
+    (let ((t (make-hasheq)))
       (letrec ((x
 		(lambda (sl)
 		  (cond
 		   ((null? sl) sl)
-		   ((hash-table-get t (syntax-object->datum (car sl)) (lambda () #f))
+		   ((hash-ref t (syntax->datum (car sl)) #f)
 		    (x (cdr sl)))
 		   (else 
-		    (hash-table-put! t (syntax-object->datum (car sl)) #t)
+		    (hash-set! t (syntax->datum (car sl)) #t)
 		    (cons (car sl) (x (cdr sl))))))))
 	(x sl))))
 
@@ -49,13 +49,13 @@
   ;; Returns an symbol in l1 intersect l2, or #f is no such symbol exists
   (define (overlap? l1 l2)
     (let/ec ret
-      (let ((t (make-hash-table)))
+      (let ((t (make-hasheq)))
 	(for-each (lambda (s1)
-		    (hash-table-put! t s1 s1))
+		    (hash-set! t s1 s1))
 		  l1)
 	(for-each (lambda (s2)
 		    (cond 
-		     ((hash-table-get t s2 (lambda () #f)) =>
+		     ((hash-ref t s2 #f) =>
 		      (lambda (o) (ret o)))))
 		  l2)
 	#f)))
@@ -67,34 +67,34 @@
       (let* ((tokens (map syntax-local-value tokens))
              (eterms (filter e-terminals-def? tokens))
              (terms (filter terminals-def? tokens))
-             (term-table (make-hash-table))
+             (term-table (make-hasheq))
              (display-rhs
               (lambda (rhs)
-                (for-each (lambda (sym) (p "~a " (hash-table-get term-table sym (lambda () sym))))
+                (for-each (lambda (sym) (p "~a " (hash-ref term-table sym sym)))
                           (car rhs))
-                (if (= 3 (length rhs))
+                (when (= 3 (length rhs))
                     (p "%prec ~a" (cadadr rhs)))
                 (p "\n"))))
         (for-each
          (lambda (t)
            (for-each
             (lambda (t)
-              (hash-table-put! term-table t (format "'~a'" t)))
-            (syntax-object->datum (e-terminals-def-t t))))
+              (hash-set! term-table t (format "'~a'" t)))
+            (syntax->datum (e-terminals-def-t t))))
          eterms)
         (for-each
          (lambda (t)
            (for-each
             (lambda (t)
               (p "%token ~a\n" t)
-              (hash-table-put! term-table t (format "~a" t)))
-            (syntax-object->datum (terminals-def-t t))))
+              (hash-set! term-table t (format "~a" t)))
+            (syntax->datum (terminals-def-t t))))
          terms)
-        (if precs
+        (when precs
             (for-each (lambda (prec)
                         (p "%~a " (car prec))
                         (for-each (lambda (tok)
-                                    (p " ~a" (hash-table-get term-table tok)))
+                                    (p " ~a" (hash-ref term-table tok)))
                                   (cdr prec))
                         (p "\n"))
                       precs))
@@ -112,7 +112,4 @@
                       (p ";\n")))
           grammar)
         (p "%%\n"))))
-  
-
-)  
   

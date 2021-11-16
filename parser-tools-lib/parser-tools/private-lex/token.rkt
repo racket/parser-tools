@@ -1,22 +1,23 @@
-(module token mzscheme
+#lang racket/base
 
-  (require-for-syntax "token-syntax.rkt")
+  (require (for-syntax racket/base
+                       "token-syntax.rkt"))
   
   ;; Defining tokens
   
   (provide define-tokens define-empty-tokens make-token token?
-           (protect (rename token-name real-token-name))
-           (protect (rename token-value real-token-value))
-           (rename token-name* token-name)
-           (rename token-value* token-value)
-           (struct position (offset line col))
-           (struct position-token (token start-pos end-pos)))
+           (protect-out (rename-out [token-name real-token-name]
+                                    [token-value real-token-value]))
+           (rename-out [token-name* token-name]
+                       [token-value* token-value])
+           (struct-out position)
+           (struct-out position-token))
 
   
   ;; A token is either
   ;; - symbol
   ;; - (make-token symbol any)
-  (define-struct token (name value) (make-inspector))
+  (define-struct token (name value) #:inspector (make-inspector))
 
   ;; token-name*: token -> symbol
   (define (token-name* t)
@@ -41,10 +42,10 @@
              t))))
   
   (define-for-syntax (make-ctor-name n)
-    (datum->syntax-object n
-                          (string->symbol  (format "token-~a" (syntax-e n)))
-                          n
-                          n))
+    (datum->syntax n
+                   (string->symbol  (format "token-~a" (syntax-e n)))
+                   n
+                   n))
   
   (define-for-syntax (make-define-tokens empty?)
     (lambda (stx)
@@ -83,7 +84,11 @@
   (define-syntax define-tokens (make-define-tokens #f))
   (define-syntax define-empty-tokens (make-define-tokens #t))
 
-  (define-struct position (offset line col) #f)
-  (define-struct position-token (token start-pos end-pos) #f)
-  )
+  (define-struct position (offset line col)
+    #:mutable ; backward compatibility
+    #:transparent)
+  (define-struct position-token (token start-pos end-pos)
+    #:mutable ; backward compatibility
+    #:transparent)
+
 

@@ -1,7 +1,7 @@
-(module parser-actions mzscheme
+#lang racket/base
   (require "grammar.rkt")
-  (provide (all-defined-except make-reduce make-reduce*)
-           (rename make-reduce* make-reduce))
+  (provide (except-out (all-defined-out) make-reduce make-reduce*)
+           (rename-out [make-reduce* make-reduce]))
 
   ;; An action is 
   ;;  - (make-shift int)
@@ -12,12 +12,12 @@
   ;; A reduce contains a runtime-reduce so that sharing of the reduces can
   ;; be easily transferred to sharing of runtime-reduces.
   
-  (define-struct action () (make-inspector))
-  (define-struct (shift action) (state) (make-inspector))
-  (define-struct (reduce action) (prod runtime-reduce) (make-inspector))
-  (define-struct (accept action) () (make-inspector))
-  (define-struct (goto action) (state) (make-inspector))
-  (define-struct (no-action action) () (make-inspector))
+  (define-struct action () #:inspector (make-inspector))
+  (define-struct (shift action) (state) #:inspector (make-inspector))
+  (define-struct (reduce action) (prod runtime-reduce) #:inspector (make-inspector))
+  (define-struct (accept action) () #:inspector (make-inspector))
+  (define-struct (goto action) (state) #:inspector (make-inspector))
+  (define-struct (no-action action) () #:inspector (make-inspector))
   
   (define (make-reduce* p)
     (make-reduce p
@@ -50,5 +50,3 @@
   (define (runtime-reduce-lhs x) (vector-ref x 1))
   (define (runtime-reduce-rhs-length x) (vector-ref x 2))
   (define (runtime-goto-state x) (- (+ x 1)))
-
-  )

@@ -1,8 +1,8 @@
-(module lex-plt-v200 mzscheme
-  (require parser-tools/lex
-           (prefix : parser-tools/lex-sre))
-  
-  (provide epsilon
+#lang racket/base
+(require parser-tools/lex
+         (prefix-in : parser-tools/lex-sre))
+
+(#%provide epsilon
            ~
            (rename :* *)
            (rename :+ +)
@@ -19,6 +19,4 @@
   
   (define-lex-trans ~
     (syntax-rules ()
-      ((_ re) (complement re)))))
-  
-  
+      ((_ re) (complement re))))

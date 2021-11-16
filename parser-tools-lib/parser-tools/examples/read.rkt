@@ -1,11 +1,12 @@
+#lang racket/base
+  
 ;; This implements the equivalent of racket's read-syntax for R5RS scheme.
 ;; It has not been thoroughly tested.  Also it will read an entire file into a 
 ;; list of syntax objects, instead of returning one syntax object at a time
 
-(module read mzscheme
-  
-  (require parser-tools/lex
-           (prefix : parser-tools/lex-sre)
+  (require (for-syntax racket/base)
+           parser-tools/lex
+           (prefix-in : parser-tools/lex-sre)
            parser-tools/yacc
            syntax/readerr)
   
@@ -170,21 +171,21 @@
   (define-syntax (build-so stx)
     (syntax-case stx ()
       ((_ value start end)
-       (with-syntax ((start-pos (datum->syntax-object 
+       (with-syntax ((start-pos (datum->syntax 
                                  (syntax end)
                                  (string->symbol 
                                   (format "$~a-start-pos"
-                                          (syntax-object->datum (syntax start))))))
-                     (end-pos (datum->syntax-object 
+                                          (syntax->datum (syntax start))))))
+                     (end-pos (datum->syntax 
                                (syntax end)
                                (string->symbol 
                                 (format "$~a-end-pos"
-                                        (syntax-object->datum (syntax end))))))
-                     (source (datum->syntax-object
+                                        (syntax->datum (syntax end))))))
+                     (source (datum->syntax
                               (syntax end)
                               'source-name)))
          (syntax
-          (datum->syntax-object 
+          (datum->syntax 
            #f
            value
            (list source 
@@ -237,6 +238,4 @@
     (case-lambda ((sn) (rs sn (current-input-port)))
                  ((sn ip) (rs sn ip))))
   
-  (provide (rename readsyntax read-syntax))
-  
-  )
+  (provide (rename-out [readsyntax read-syntax]))

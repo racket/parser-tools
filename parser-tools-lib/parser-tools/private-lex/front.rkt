@@ -1,6 +1,6 @@
-(module front mzscheme
-  (require (prefix is: mzlib/integer-set)
-           mzlib/list
+#lang racket/base
+  (require (prefix-in is: data/integer-set)
+           racket/list
            syntax/stx
            "util.rkt"
            "stx.rkt"
@@ -25,7 +25,7 @@
   ;; dfa->1d-table : dfa -> (same as build-lexer)
  (define (dfa->1d-table dfa)
    (let ((state-table (make-vector (dfa-num-states dfa) #f))
-         (transition-cache (make-hash-table 'equal)))
+         (transition-cache (make-hash)))
      (for-each
       (lambda (trans)
         (let* ((from-state (car trans))
@@ -38,12 +38,12 @@
                                 (to (cdr chars/to)))
                             (map (lambda (char-range)
                                    (let ((entry (vector (car char-range) (cdr char-range) to)))
-                                     (hash-table-get transition-cache entry
-                                                     (lambda ()
-                                                       (hash-table-put! transition-cache
-                                                                        entry
-                                                                        entry)
-                                                       entry))))
+                                     (hash-ref transition-cache entry
+                                               (lambda ()
+                                                 (hash-set! transition-cache
+                                                            entry
+                                                            entry)
+                                                 entry))))
                                  char-ranges)))
                         all-chars/to))
                  (lambda (a b)
@@ -160,20 +160,20 @@
                                    (lambda (x) (if x (vector-length x) 0))
                                    (vector->list table))))
             (num-different-entries
-             (let ((ht (make-hash-table)))
+             (let ((ht (make-hasheq)))
                (for-each
                 (lambda (x)
                   (when x
                     (for-each
                      (lambda (y)
-                       (hash-table-put! ht y #t))
+                       (hash-set! ht y #t))
                      (vector->list x))))
                 (vector->list table))
-               (length (hash-table-map ht cons)))))
+               (length (hash-map ht cons)))))
         (printf "~a states, ~aKB\n"
                 num-states
                 (/ (* 4.0 (+ 2 num-states (* 2 num-vectors) num-entries
                              (* 5 num-different-entries))) 1024)))
       (values table (dfa-start-state dfa) (dfa->actions dfa) (dfa->no-look dfa)
               (unbox disappeared-uses))))
-  )
+

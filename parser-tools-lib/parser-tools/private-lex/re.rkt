@@ -1,7 +1,7 @@
-(module re mzscheme
-  (require mzlib/list
-           scheme/match
-           (prefix is: mzlib/integer-set)
+#lang racket/base
+  (require racket/list
+           racket/match
+           (prefix-in is: data/integer-set)
            "util.rkt")
   
   (provide ->re build-epsilon build-zero build-char-set build-concat
@@ -26,15 +26,15 @@
   ;;
   ;; Every re must have an index field globally different from all
   ;; other re index fields.
-  (define-struct re (nullable? index) (make-inspector))
-  (define-struct (epsilonR re) () (make-inspector))
-  (define-struct (zeroR re) () (make-inspector))
-  (define-struct (char-setR re) (chars) (make-inspector))
-  (define-struct (concatR re) (re1 re2) (make-inspector))
-  (define-struct (repeatR re) (low high re) (make-inspector))
-  (define-struct (orR re) (res) (make-inspector))
-  (define-struct (andR re) (res) (make-inspector))
-  (define-struct (negR re) (re) (make-inspector))
+  (define-struct re (nullable? index) #:inspector (make-inspector))
+  (define-struct (epsilonR re) () #:inspector (make-inspector))
+  (define-struct (zeroR re) () #:inspector (make-inspector))
+  (define-struct (char-setR re) (chars) #:inspector (make-inspector))
+  (define-struct (concatR re) (re1 re2) #:inspector (make-inspector))
+  (define-struct (repeatR re) (low high re) #:inspector (make-inspector))
+  (define-struct (orR re) (res) #:inspector (make-inspector))
+  (define-struct (andR re) (res) #:inspector (make-inspector))
+  (define-struct (negR re) (re) #:inspector (make-inspector))
 
   ;; e : re
   ;; The unique epsilon re
@@ -381,5 +381,3 @@
               ((isc (char-setR-chars (->re `(char-complement #\001 (char-range #\002 ,(integer->char max-char-num))) c)))
                (isc (is:make-range 0)))
               )
-  
-  )

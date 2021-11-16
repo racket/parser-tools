@@ -1,14 +1,14 @@
-#lang scheme/base
+#lang racket/base
 
-(require (for-syntax scheme/base
+(require (for-syntax racket/base
                      "private-yacc/parser-builder.rkt"
                      "private-yacc/grammar.rkt"
                      "private-yacc/yacc-helper.rkt"
                      "private-yacc/parser-actions.rkt"))
 (require "private-lex/token.rkt"
          "private-yacc/parser-actions.rkt"
-         mzlib/etc
-         mzlib/pretty
+         racket/pretty
+         racket/local
          syntax/readerr)
 
 (provide parser)

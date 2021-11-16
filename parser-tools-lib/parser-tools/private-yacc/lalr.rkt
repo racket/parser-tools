@@ -1,11 +1,11 @@
-(module lalr mzscheme
+#lang racket/base
 
   ;; Compute LALR lookaheads from DeRemer and Pennello 1982
 
   (require "lr0.rkt"
            "grammar.rkt"
-           mzlib/list
-           mzlib/class)
+           racket/list
+           racket/class)
 
   (provide compute-LA)
   
@@ -154,7 +154,7 @@
        (for-each
         (lambda (non-term)
           (let ((res (f (make-trans-key state non-term))))
-            (if (not (null? res))
+            (when (not (null? res))
                 (printf "~a(~a, ~a) = ~a\n"
                         name
                         state
@@ -172,7 +172,7 @@
           (for-each
            (lambda (prod)
              (let ((res (f state prod)))
-               (if (not (null? res))
+               (when (not (null? res))
                    (printf "~a(~a, ~a) = ~a\n"
                            name
                            (kernel-index state)
@@ -200,7 +200,7 @@
     (let ((v (make-vector n #f)))
       (let loop ((i (sub1 (vector-length v))))
         (when (>= i 0)
-          (vector-set! v i (make-hash-table))
+          (vector-set! v i (make-hasheq))
           (loop (sub1 i))))
       v))
   
@@ -209,18 +209,18 @@
     (lambda (tk)
       (let ((st (trans-key-st tk))
             (gs (trans-key-gs tk)))
-        (hash-table-get (vector-ref map (kernel-index st))
-                        (gram-sym-symbol gs)
-                        (lambda () 0)))))
+        (hash-ref (vector-ref map (kernel-index st))
+                  (gram-sym-symbol gs)
+                  0))))
 
   ;; add-tk-map : (vectorof (symbol? int hashtable)) -> trans-key int -> 
   (define (add-tk-map map)
     (lambda (tk v)
       (let ((st (trans-key-st tk))
             (gs (trans-key-gs tk)))
-        (hash-table-put! (vector-ref map (kernel-index st))
-                         (gram-sym-symbol gs)
-                         v))))
+        (hash-set! (vector-ref map (kernel-index st))
+                   (gram-sym-symbol gs)
+                   v))))
              
   ;; digraph-tk->terml: 
   ;;   (trans-key list) * (trans-key -> trans-key list) * (trans-key -> term list) * int * int * int
@@ -274,4 +274,3 @@
                     (traverse x)))
                 nodes)
       get-f))
-)

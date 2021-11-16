@@ -1,4 +1,4 @@
-(module graph mzscheme
+#lang racket/base
 
   (provide digraph)
 
@@ -14,13 +14,13 @@
   (define (digraph nodes edges f- union fail)
     (letrec [
              ;; Will map elements of 'a to 'b sets
-             (results (make-hash-table))
-             (f (lambda (x) (hash-table-get results x fail)))
+             (results (make-hasheq))
+             (f (lambda (x) (hash-ref results x fail)))
              
              ;; Maps elements of 'a to integers.
-             (N (make-hash-table))
-             (get-N (lambda (x) (hash-table-get N x zero-thunk)))
-             (set-N (lambda (x d) (hash-table-put! N x d)))
+             (N (make-hasheq))
+             (get-N (lambda (x) (hash-ref N x zero-thunk)))
+             (set-N (lambda (x d) (hash-set! N x d)))
              
              (stack null)
              (push (lambda (x)
@@ -37,25 +37,23 @@
                 (push x)
                 (let ((d (depth)))
                   (set-N x d)
-                  (hash-table-put! results x (f- x))
+                  (hash-set! results x (f- x))
                   (for-each (lambda (y)
-                              (if (= 0 (get-N y))
+                              (when (= 0 (get-N y))
                                   (traverse y))
-                              (hash-table-put! results
-                                               x
-                                               (union (f x) (f y)))
+                              (hash-set! results
+                                         x
+                                         (union (f x) (f y)))
                               (set-N x (min (get-N x) (get-N y))))
                             (edges x))
-                  (if (= d (get-N x))
+                  (when (= d (get-N x))
                       (let loop ((p (pop)))
                         (set-N p +inf.0)
-                        (hash-table-put! results p (f x))
-                        (if (not (eq? x p))
+                        (hash-set! results p (f x))
+                        (when (not (eq? x p))
                             (loop (pop))))))))]
       (for-each (lambda (x)
-                  (if (= 0 (get-N x))
+                  (when (= 0 (get-N x))
                       (traverse x)))
                 nodes)
       f))
-
-)

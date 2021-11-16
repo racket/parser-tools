@@ -1,9 +1,9 @@
-(module yacc-to-scheme mzscheme
+#lang racket/base
   (require parser-tools/lex
-           (prefix : parser-tools/lex-sre)
+           (prefix-in : parser-tools/lex-sre)
            parser-tools/yacc
            syntax/readerr
-           mzlib/list)
+           racket/list)
   (provide trans)
   
   (define match-double-string
@@ -99,22 +99,22 @@
   
   (define (trans filename)
     (let* ((i (open-input-file filename))
-           (terms (make-hash-table))
-           (eterms (make-hash-table))
-           (nterms (make-hash-table))
+           (terms (make-hasheq))
+           (eterms (make-hasheq))
+           (nterms (make-hasheq))
            (enter-term
             (lambda (s)
-              (if (not (hash-table-get nterms s (lambda () #f)))
-                  (hash-table-put! terms s #t))))
+              (when (not (hash-ref nterms s (lambda () #f)))
+                  (hash-set! terms s #t))))
            (enter-empty-term
             (lambda (s)
-              (if (not (hash-table-get nterms s (lambda () #f)))
-                  (hash-table-put! eterms s #t))))
+              (when (not (hash-ref nterms s (lambda () #f)))
+                  (hash-set! eterms s #t))))
            (enter-non-term
             (lambda (s)
-	     (hash-table-remove! terms s)
-              (hash-table-remove! eterms s)
-              (hash-table-put! nterms s #t))))
+	     (hash-remove! terms s)
+              (hash-remove! eterms s)
+              (hash-set! nterms s #t))))
       (port-count-lines! i)
       (file-path filename)
       (regexp-match "%%" i)
@@ -124,12 +124,12 @@
 		      (let ((t (get-token-grammar i)))
 			t)))))
           `(begin
-             (define-tokens t ,(sort (hash-table-map terms (lambda (k v) k)) symbol<?))
-             (define-empty-tokens et ,(sort (hash-table-map eterms (lambda (k v) k)) symbol<?))
+             (define-tokens t ,(sort (hash-map terms (lambda (k v) k)) symbol<?))
+             (define-empty-tokens et ,(sort (hash-map eterms (lambda (k v) k)) symbol<?))
              (parser
               (start ___)
               (end ___)
               (error ___)
               (tokens t et)
               (grammar ,@gram))))
-            (close-input-port i)))))
+            (close-input-port i))))

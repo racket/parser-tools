@@ -1,29 +1,30 @@
+#lang racket/base
+
 ;; Constructs to create and access grammars, the internal
 ;; representation of the input to the parser generator.
 
-(module grammar mzscheme
-  
-  (require mzlib/class
-           mzlib/list
+  (require racket/class
+           (except-in racket/list
+                      remove-duplicates)
            "yacc-helper.rkt"
            racket/contract)
   
   ;; Each production has a unique index 0 <= index <= number of productions
-  (define-struct prod (lhs rhs index prec action) (make-inspector))
+  (define-struct prod (lhs rhs [index #:mutable] prec action) #:inspector (make-inspector))
 
   ;; The dot-pos field is the index of the element in the rhs
   ;; of prod that the dot immediately precedes.
   ;; Thus 0 <= dot-pos <= (vector-length rhs).
-  (define-struct item (prod dot-pos) (make-inspector))
+  (define-struct item (prod dot-pos) #:inspector (make-inspector))
   
   ;; gram-sym = (union term? non-term?)
   ;; Each term has a unique index 0 <= index < number of terms
   ;; Each non-term has a unique index 0 <= index < number of non-terms  
-  (define-struct term (sym index prec) (make-inspector))
-  (define-struct non-term (sym index) (make-inspector))
+  (define-struct term (sym [index #:mutable] prec) #:inspector (make-inspector))
+  (define-struct non-term (sym [index #:mutable]) #:inspector (make-inspector))
 
   ;; a precedence declaration.
-  (define-struct prec (num assoc) (make-inspector))
+  (define-struct prec (num assoc) #:inspector (make-inspector))
   
   (provide/contract
    (make-item (prod? (or/c #f natural-number/c) . -> . item?))
@@ -275,6 +276,3 @@
              (if added
                  (loop new-P)
                  nullable)))))))
-
-  
-)

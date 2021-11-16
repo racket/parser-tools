@@ -1,6 +1,7 @@
-#lang racket
+#lang racket/base
 
-(require "util.rkt")
+(require racket/promise
+         "util.rkt")
 
 (provide (all-defined-out))
 

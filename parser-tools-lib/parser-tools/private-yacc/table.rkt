@@ -1,4 +1,4 @@
-#lang scheme/base
+#lang racket/base
 
   ;; Routine to build the LALR table
 
@@ -7,8 +7,8 @@
            "lalr.rkt"
            "parser-actions.rkt"
            racket/contract
-           mzlib/list
-           mzlib/class)
+           racket/list
+           racket/class)
 
   (define (is-a-grammar%? x) (is-a? x grammar%))
   (provide/contract 

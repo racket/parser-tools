@@ -1,14 +1,14 @@
-(module lr0 mzscheme
+#lang racket/base
 
   ;; Handle the LR0 automaton
   
   (require "grammar.rkt"
            "graph.rkt"
-           mzlib/list
-           mzlib/class)
+           racket/list
+           racket/class)
   
   (provide build-lr0-automaton lr0%
-           (struct trans-key (st gs)) trans-key-list-remove-dups
+           (struct-out trans-key) trans-key-list-remove-dups
            kernel-items kernel-index)
 
   ;; kernel = (make-kernel (LR1-item list) index)
@@ -16,8 +16,8 @@
   ;;   be used to compare kernels
   ;;   Each kernel is assigned a unique index, 0 <= index < number of states
   ;; trans-key = (make-trans-key kernel gram-sym)
-  (define-struct kernel (items index) (make-inspector))
-  (define-struct trans-key (st gs) (make-inspector))
+  (define-struct kernel (items index) #:inspector (make-inspector))
+  (define-struct trans-key (st gs) #:inspector (make-inspector))
 
   (define (trans-key<? a b)
     (let ((kia (kernel-index (trans-key-st a)))
@@ -47,24 +47,24 @@
     (let ((transitions (make-vector num-states #f)))
       (let loop ((i (sub1 (vector-length transitions))))
         (when (>= i 0)
-          (vector-set! transitions i (make-hash-table))
+          (vector-set! transitions i (make-hasheq))
           (loop (sub1 i))))
       (for-each
        (lambda (trans-key/kernel)
          (let ((tk (car trans-key/kernel)))
-           (hash-table-put! (vector-ref transitions (kernel-index (trans-key-st tk)))
-                            (gram-sym-symbol (trans-key-gs tk))
-                            (cdr trans-key/kernel))))
+           (hash-set! (vector-ref transitions (kernel-index (trans-key-st tk)))
+                      (gram-sym-symbol (trans-key-gs tk))
+                      (cdr trans-key/kernel))))
        assoc)
       transitions))
   
   ;; reverse-assoc : (listof (cons/c trans-key? kernel?)) ->
   ;;                 (listof (cons/c trans-key? (listof kernel?)))
   (define (reverse-assoc assoc)
-    (let ((reverse-hash (make-hash-table 'equal))
+    (let ((reverse-hash (make-hash))
           (hash-table-add!
            (lambda (ht k v)
-             (hash-table-put! ht k (cons v (hash-table-get ht k (lambda () null)))))))
+             (hash-set! ht k (cons v (hash-ref ht k null))))))
       (for-each
        (lambda (trans-key/kernel)
          (let ((tk (car trans-key/kernel)))
@@ -73,7 +73,7 @@
                                             (trans-key-gs tk))
                             (trans-key-st tk))))
        assoc)
-      (hash-table-map reverse-hash cons)))
+      (hash-map reverse-hash cons)))
 
 
   ;; kernel-list-remove-duplicates
@@ -115,7 +115,7 @@
       (define/public (for-each-state f)
         (let ((num-states (vector-length states)))
           (let loop ((i 0))
-            (if (< i num-states)
+            (when (< i num-states)
                 (begin
                   (f (vector-ref states i))
                   (loop (add1 i)))))))
@@ -124,9 +124,9 @@
       ;; returns the state reached from state k on input s, or #f when k
       ;; has no transition on s
       (define/public (run-automaton k s)
-        (hash-table-get (vector-ref transitions (kernel-index k))
-                        (gram-sym-symbol s)
-                        (lambda () #f)))
+        (hash-ref (vector-ref transitions (kernel-index k))
+                  (gram-sym-symbol s)
+                  #f))
 
       ;; run-automaton-back : (listof kernel?) gram-sym? -> (listof kernel)
       ;; returns the list of states that can reach k by transitioning on s.
@@ -134,9 +134,9 @@
         (apply append
                (map 
                 (lambda (k)
-                  (hash-table-get (vector-ref reverse-transitions (kernel-index k))
-                                  (gram-sym-symbol s)
-                                  (lambda () null)))
+                  (hash-ref (vector-ref reverse-transitions (kernel-index k))
+                            (gram-sym-symbol s)
+                            null))
                 k)))))
 
   (define (union comp<?)
@@ -169,7 +169,7 @@
   (define (build-lr0-automaton grammar)
 ;    (printf "LR(0) automaton:\n")
     (letrec (
-             (epsilons (make-hash-table 'equal))
+             (epsilons (make-hash))
              (grammar-symbols (append (send grammar get-non-terms)
                                       (send grammar get-terms)))
              ;; first-non-term: non-term -> non-term list
@@ -221,7 +221,7 @@
              
              ;; keeps the kernels we have seen, so we can have a unique
              ;; list for each kernel
-             (kernels (make-hash-table 'equal))
+             (kernels (make-hash))
 
              (counter 0)
              
@@ -234,7 +234,7 @@
               (lambda (kernel)
                 (let (
                       ;; maps a gram-syms to a list of items
-                      (table (make-hash-table))
+                      (table (make-hasheq))
 
                       ;; add-item!: 
                       ;;   (symbol (listof item) hashtable) item? ->
@@ -246,20 +246,20 @@
                            (cond
                             (gs
                              (let ((already 
-                                    (hash-table-get table
-                                                    (gram-sym-symbol gs)
-                                                    (lambda () null))))
+                                    (hash-ref table
+                                              (gram-sym-symbol gs)
+                                              null)))
                                (unless (member i already)
-                                 (hash-table-put! table 
-                                                  (gram-sym-symbol gs)
-                                                  (cons i already)))))
+                                 (hash-set! table 
+                                            (gram-sym-symbol gs)
+                                            (cons i already)))))
                             ((= 0 (vector-length (prod-rhs (item-prod i))))
-                             (let ((current (hash-table-get epsilons
-                                                            kernel
-                                                            (lambda () null))))
-                               (hash-table-put! epsilons
-                                                kernel
-                                                (cons i current)))))))))
+                             (let ((current (hash-ref epsilons
+                                                      kernel
+                                                      null)))
+                               (hash-set! epsilons
+                                          kernel
+                                          (cons i current)))))))))
                   
                   ;; Group the items of the LR0 closure of the kernel
                   ;; by the character after the dot
@@ -282,7 +282,7 @@
                                           (filter (lambda (x) x)
                                                   (map move-dot-right items))
                                           item<?))
-                             (unique-kernel (hash-table-get
+                             (unique-kernel (hash-ref
                                              kernels
                                              new-kernel
                                              (lambda () 
@@ -291,9 +291,9 @@
                                                          counter)))
                                                  (set! new #t)
                                                  (set! counter (add1 counter))
-                                                 (hash-table-put! kernels
-                                                                  new-kernel
-                                                                  k)
+                                                 (hash-set! kernels
+                                                            new-kernel
+                                                            k)
                                                  k)))))
                         (cond
                           ((term? gs)
@@ -315,9 +315,9 @@
                       (cond
                         ((null? gsyms) null)
                         (else
-                         (let ((items (hash-table-get table
-                                                      (gram-sym-symbol (car gsyms))
-                                                      (lambda () null))))
+                         (let ((items (hash-ref table
+                                                (gram-sym-symbol (car gsyms))
+                                                null)))
                            (cond
                              ((null? items) (loop (cdr gsyms)))
                              (else
@@ -330,7 +330,7 @@
              (startk
               (map (lambda (start)
                      (let ((k (make-kernel start counter)))
-                       (hash-table-put! kernels start k)
+                       (hash-set! kernels start k)
                        (set! counter (add1 counter))
                        k))
                    starts))
@@ -351,7 +351,7 @@
           (enq! new-kernels (goto (car old-kernels)))
           (loop (cdr old-kernels) (cons (car old-kernels) seen-kernels)))))))
 
-  (define-struct q (f l) (make-inspector))
+  (define-struct q (f l) #:mutable #:inspector (make-inspector))
   (define (empty-queue? q)
     (null? (q-f q)))
   (define (make-queue)
@@ -368,5 +368,3 @@
     (begin0
      (mcar (q-f q))
      (set-q-f! q (mcdr (q-f q)))))
-
-)

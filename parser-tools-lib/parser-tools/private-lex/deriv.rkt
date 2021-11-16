@@ -1,11 +1,11 @@
-(module deriv mzscheme
+#lang racket/base
   
-  (require mzlib/list
-           (prefix is: mzlib/integer-set)
+  (require racket/list
+           (prefix-in is: data/integer-set)
            "re.rkt"
            "util.rkt")
 
-  (provide build-dfa print-dfa (struct dfa (num-states start-state final-states/actions transitions)))
+  (provide build-dfa print-dfa (struct-out dfa))
 
   (define e (build-epsilon))
   (define z (build-zero))
@@ -222,13 +222,14 @@
   ;;                    (list-of (cons int (list-of (cons char-set int)))))
   ;; Each transitions is a state and a list of chars with the state to transition to.
   ;; The finals and transitions are sorted by state number, and duplicate free.
-  (define-struct dfa (num-states start-state final-states/actions transitions) (make-inspector))
+  (define-struct dfa (num-states start-state final-states/actions transitions)
+    #:inspector (make-inspector))
   
   (define loc:get-integer is:get-integer)
   
   ;; build-dfa : (list-of re-action) cache -> dfa
   (define (build-dfa rs cache)
-    (let* ((transitions (make-hash-table))
+    (let* ((transitions (make-hasheq))
            (get-state-number (make-counter))
            (start (make-state rs (get-state-number))))
       (cache (cons 'state (get-key rs)) (lambda () start))
@@ -244,13 +245,13 @@
                                           (cons (state-index state) (get-final (state-spec state))))
                                         all-states))
                            (lambda (a b) (< (car a) (car b))))
-                     (sort (hash-table-map transitions
-                                           (lambda (state trans)
-                                             (cons (state-index state)
-                                                   (map (lambda (t)
-                                                          (cons (car t)
-                                                                (state-index (cdr t))))
-                                                        trans))))
+                     (sort (hash-map transitions
+                                     (lambda (state trans)
+                                       (cons (state-index state)
+                                             (map (lambda (t)
+                                                    (cons (car t)
+                                                          (state-index (cdr t))))
+                                                  trans))))
                            (lambda (a b) (< (car a) (car b))))))
           ((null? old-states)
            (loop new-states null all-states (compute-chars new-states)))
@@ -268,11 +269,10 @@
                                            (set! new-state? #t)
                                            (make-state new-re (get-state-number)))))
 		       (new-all-states (if new-state? (cons new-state all-states) all-states)))
-                  (hash-table-put! transitions 
-                                   state
-                                   (cons (cons c new-state)
-                                         (hash-table-get transitions state
-                                                         (lambda () null))))
+                  (hash-set! transitions 
+                             state
+                             (cons (cons c new-state)
+                                   (hash-ref transitions state null)))
                   (cond
                     (new-state?
                      (loop old-states (cons new-state new-states) new-all-states (cdr cs)))
@@ -336,4 +336,4 @@
                                        (repetition 1 +inf.0 "1")))))))
   (define t14 (build-test-dfa `((complement "1"))))
 |#
-  )
+

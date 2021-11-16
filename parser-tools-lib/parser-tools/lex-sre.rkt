@@ -1,7 +1,8 @@
-(module lex-sre mzscheme
-  (require parser-tools/lex)
+#lang racket/base
+(require (for-syntax racket/base)
+         parser-tools/lex)
     
-  (provide (rename sre-* *)
+(#%provide (rename sre-* *)
            (rename sre-+ +)
            ?
            (rename sre-= =)
@@ -113,7 +114,5 @@
       ((_ c1 c2 c ...)
        (union (char-range c1 c2)
               (/-only-chars c ...)))))
-  
-  )
                            
    
