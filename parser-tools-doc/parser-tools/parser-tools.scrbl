@@ -275,7 +275,8 @@ error.}
    @racket[end-pos]. The @racket[offset] field contains the offset of
    the character in the input.  The @racket[line] field contains the
    line number of the character.  The @racket[col] field contains the
-   offset in the current line.}
+   offset in the current line.  The fields are indexed as in the
+   @seclink["linecol" #:doc '(lib "scribblings/reference/reference.scrbl")]{position-counting of ports}.}
 
 @defstruct[position-token ([token any/c]
                            [start-pos position?]
