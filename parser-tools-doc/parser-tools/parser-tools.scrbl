@@ -526,7 +526,7 @@ but tokens may not be the right choice when using @racket[lexer] in other situat
    @racket[token-value].
 
    A token cannot be named @racketidfont{error}, since
-   @racketidfont{error} it has special use in the parser.}
+   @racketidfont{error} has a special use in the parser.}
 
 @defform[(define-empty-tokens group-id (token-id ...))]{
 
