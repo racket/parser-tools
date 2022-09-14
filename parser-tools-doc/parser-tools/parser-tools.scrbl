@@ -530,7 +530,7 @@ but tokens may not be the right choice when using @racket[lexer] in other situat
 
 @defform[(define-empty-tokens group-id (token-id ...))]{
 
-   Like @racket[define-tokens], except a each token constructor
+   Like @racket[define-tokens], but each token constructor
    @racketidfont{token-}@racket[token-id] takes no arguments and returns
    @racket[(@#,racket[quote] token-id)].}
 
@@ -665,7 +665,7 @@ but tokens may not be the right choice when using @racket[lexer] in other situat
       error.
 
       If the @racket[src-pos] declaration is present, the function
-      should accept 5 arguments,:
+      should accept 5 arguments:
 
       @racketblock[(lambda (tok-ok? tok-name tok-value _start-pos _end-pos) 
                      ....)]
@@ -681,7 +681,7 @@ but tokens may not be the right choice when using @racket[lexer] in other situat
       the error was detected.  The fourth and fifth arguments, if
       present, provide the source positions of that token.
 
-      In both cases, the function is allowed to accept an additional keyword argument named @racket[#:stack]. This argument is a representation of the parsing automata's stack. This can, for example, be used to generate context-sensitive error messages as described in @link["https://dl.acm.org/citation.cfm?id=937563.937566"]{Generating LR syntax error messages from examples}, by Clinton L. Jeffrey.}
+      In both cases, the function is allowed to accept an additional keyword argument named @racket[#:stack]. This argument is a representation of the parsing automaton's stack. This can, for example, be used to generate context-sensitive error messages as described in @link["https://dl.acm.org/citation.cfm?id=937563.937566"]{Generating LR syntax error messages from examples}, by Clinton L. Jeffrey.}
 
       @item{@racket[(precs (assoc token-id ...) ...)]
       @italic{OPTIONAL}
@@ -759,7 +759,7 @@ but tokens may not be the right choice when using @racket[lexer] in other situat
     @racket[parser] expression produces a list of parsing functions,
     one for each non-terminal in the same order. Each parsing function
     is like the result of a parser expression with only one
-    @racket[start] non-terminal,
+    @racket[start] non-terminal.
 
     Each time the Racket code for a @racket[parser] is compiled
     (e.g. when a @filepath{.rkt} file containing a @racket[parser] form
