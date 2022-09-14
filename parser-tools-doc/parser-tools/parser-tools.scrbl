@@ -607,11 +607,12 @@ but tokens may not be the right choice when using @racket[lexer] in other situat
       Each action is Racket code that has the same scope as its
       parser's definition, except that the variables @racket[$1], ...,
       @racketidfont{$}@math{i} are bound, where @math{i} is the number
-      of @racket[grammar-id]s in the corresponding production. Each
-      @racketidfont{$}@math{k} is bound to the result of the action
-      for the @math{k}@superscript{th} grammar symbol on the right of
-      the production, if that grammar symbol is a non-terminal, or the
-      value stored in the token if the grammar symbol is a terminal.
+      of @racket[grammar-id]s in the corresponding production. If the
+      @math{k}@superscript{th} grammar symbol on the right of
+      the production is a non-terminal, @racketidfont{$}@math{k}
+      is bound to the result of its action; if it is a terminal,
+      @racketidfont{$}@math{k} is bound to the value stored in the
+      token.
       If the @racket[src-pos] option is present in the parser, then
       variables @racket[$1-start-pos], ...,
       @racketidfont{$}@math{i}@racketidfont{-start-pos} and
