@@ -161,36 +161,9 @@ are a few examples, using @racket[:] prefixed SRE syntax:
  @racket[complement].}
 ]
 
+  @racket[start-pos], @racket[end-pos], @racket[lexeme], @racket[input-port], and @racket[return-without-pos]
+  have special meaning inside of a lexer.
 
-     The following binding have special meaning inside of a lexer
-     action:
-
-     @itemize[
-       @item{@racket[start-pos] --- a @racket[position] struct for the first character matched.}
-       @item{@racket[end-pos] --- a @racket[position] struct for the character after the last character in the match.}
-       @item{@racket[lexeme] --- the matched string.}
-       @item{@racket[input-port] --- the input-port being
-            processed (this is useful for matching input with multiple
-            lexers).}
-       @item{@racket[(return-without-pos x)] is a function (continuation) that
-	immediately returns the value of @racket[x] from the lexer.  This useful
-	in a src-pos lexer to prevent the lexer from adding source
-	information.  For example:
-
-	@racketblock[
-	(define get-token
-	  (lexer-src-pos
-	  ...
-	  ((comment) (get-token input-port))
-	  ...))
-	]
-
-	would wrap the source location information for the comment around
-	the value of the recursive call.  Using
-	@racket[((comment) (return-without-pos (get-token input-port)))] 
-	will cause the value of the recursive call to be returned without
-	wrapping position around it.}
-     ]
 
      The lexer raises an exception @racket[(exn:read)] if none of the
      regular expressions match the input.  Hint: If @racket[(any-char
@@ -296,16 +269,50 @@ an @racket[action-expr], returns @racket[(make-position-token
 _action-result start-pos end-pos)] instead of simply
 @racket[_action-result].}
 
-@deftogether[(
-@defidform[start-pos]
-@defidform[end-pos]
-@defidform[lexeme]
-@defidform[input-port]
-@defidform[return-without-pos]
-)]{
+@(define in-lexer-usage @elem{
+  Its use outside of a @racket[lexer] action is a syntax error.
+})
 
-Use of these names outside of a @racket[lexer] action is a syntax
-error.}
+@defidform[start-pos]{
+  Produces a @racket[position] struct for the first character matched.
+  @|in-lexer-usage|
+}
+
+@defidform[end-pos]{
+  Produces a @racket[position] struct for the character after the last character in the match.
+  @|in-lexer-usage|
+}
+
+@defidform[lexeme]{
+  Produces the matched string.
+  @|in-lexer-usage|
+}
+
+@defidform[input-port]{
+  Produces the input port being processed, which is particularly useful
+  for matching input with multiple lexers.
+  @|in-lexer-usage|
+}
+
+@defidform[return-without-pos]{
+  Produces a function (continuation) that
+  immediately returns its argument from the lexer.
+  This is useful in @racket[lexer-src-pos] to prevent the lexer from adding source
+  information. For example:
+  @racketblock[
+    (define get-token
+      (lexer-src-pos
+        ...
+        [(comment) (get-token input-port)]
+        ...))
+  ]
+  would wrap the source location information for the comment around
+  the value of the recursive call.  Using
+  @racket[[(comment) (return-without-pos (get-token input-port))]]
+  will cause the value of the recursive call to be returned without
+  wrapping position around it.
+  @|in-lexer-usage|
+}
 
 @defstruct[position ([offset exact-positive-integer?]
                      [line exact-positive-integer?]
