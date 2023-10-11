@@ -161,8 +161,8 @@ are a few examples, using @racket[:] prefixed SRE syntax:
  @racket[complement].}
 ]
 
-  @racket[start-pos], @racket[end-pos], @racket[lexeme], @racket[input-port], and @racket[return-without-pos]
-  have special meaning inside of a lexer.
+  The @racket[start-pos], @racket[end-pos], @racket[lexeme], @racket[input-port], and @racket[return-without-pos]
+  forms have special meaning inside of a lexer.
 
 
      The lexer raises an exception @racket[(exn:read)] if none of the
