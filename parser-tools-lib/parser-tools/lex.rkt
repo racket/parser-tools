@@ -56,13 +56,15 @@
         
   (define-for-syntax (make-lexer-trans src-pos?)
     (lambda (stx)
-      (define-splicing-syntax-class maybe-suppress-warnings
+      (define-splicing-syntax-class maybe-empty-match-mode
+        (pattern (~seq #:disallow-empty)
+                 #:attr mode 'disallow)
         (pattern (~seq #:suppress-warnings)
-                 #:attr suppress? #t)
+                 #:attr mode 'allow)
         (pattern (~seq)
-                 #:attr suppress? #f))
+                 #:attr mode 'warn))
       (syntax-parse stx
-        ((_ suppress:maybe-suppress-warnings re-act ...)
+        ((_ empty-match:maybe-empty-match-mode re-act ...)
          (begin
            (for-each
             (lambda (x)
@@ -105,15 +107,17 @@
                (raise-syntax-error (if src-pos? 'lexer/src-pos 'lexer) "expected at least one action" stx))
              (let-values (((trans start action-names no-look disappeared-uses)
                            (build-lexer re-actname-lst)))
-               (when (and (not (attribute suppress.suppress?))
+               (when (and (not (eq? (attribute empty-match.mode) 'allow))
                           (vector-ref action-names start)) ;; Start state is final
+                 (define xs (let ([vec (vector-ref trans start)])
+                              (if vec (vector->list (vector-ref trans start)) null)))
                  (unless (and
                           ;; All the successor states are final
                           (andmap (lambda (x) (vector-ref action-names (vector-ref x 2)))
-                                      (vector->list (vector-ref trans start)))
+                                  xs)
                           ;; Each character has a successor state
                           (let loop ((check 0)
-                                     (nexts (vector->list (vector-ref trans start))))
+                                     (nexts xs))
                             (cond
                               ((null? nexts) #f)
                               (else
@@ -122,7 +126,9 @@
                                       (let ((next-check (vector-ref next 1)))
                                         (or (>= next-check max-char-num)
                                             (loop (add1 next-check) (cdr nexts))))))))))
-                   (log-error "Warning: lexer at ~a can accept the empty string.\n" stx)))
+                   (if (eq? (attribute empty-match.mode) 'disallow)
+                       (raise-syntax-error #f "lexer can accept the empty string" stx)
+                       (log-error "Warning: lexer at ~a can accept the empty string.\n" stx))))
                (with-syntax ((start-state-stx start)
                              (trans-table-stx trans)
                              (no-lookahead-stx no-look)

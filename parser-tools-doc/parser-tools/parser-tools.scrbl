@@ -36,9 +36,10 @@ style lexer and parser generators.
 @defform/subs[#:literals (repetition union intersection complement concatenation
                           char-range char-complement
                           eof special special-comment)
-              (lexer maybe-suppress-warnings [trigger action-expr] ...)
-              ([maybe-suppress-warnings (code:line)
-                                        #:suppress-warnings]
+              (lexer empty-match-mode [trigger action-expr] ...)
+              ([empty-match-mode (code:line)
+                                 #:disallow-empty
+                                 #:suppress-warnings]
                [trigger re
                         (eof)
                         (special)
@@ -220,8 +221,9 @@ are a few examples, using @racket[:] prefixed SRE syntax:
     bytecode file.
 
  If the lexer can accept the empty string, a message is sent
- to @racket[current-logger]. These warnings can be disabled
- by giving the @racket[#:suppress-warnings] flag.
+ to @racket[current-logger] by default. This warning can be disabled
+ by giving the @racket[#:suppress-warnings] flag, or it can be
+ turned into a syntax error by using @racket[#:disallow-empty].
 
  @examples[#:eval parser-eval
    (define sample-input "( lambda (a ) (add_number a 42  ))")
@@ -260,7 +262,8 @@ are a few examples, using @racket[:] prefixed SRE syntax:
    (get-tokens the-lexer/SRE)
  ]
 
- @history[#:changed "7.7.0.7" @elem{Add @racket[#:suppress-warnings] flag.}]}
+ @history[#:changed "7.7.0.7" @elem{Add @racket[#:suppress-warnings] flag.}
+          #:changed "9.0" @elem{Add @racket[#:disallow-empty] flag.}]}
 
 @defform[(lexer-src-pos maybe-suppress-warnings [trigger action-expr] ...)]{
 
